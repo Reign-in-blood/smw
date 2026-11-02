@@ -202,6 +202,14 @@ Le test utilisateur du commit `1694bb8` confirme que les monstres apparaissent t
 
 **À tester / non validé Windows** : niveau avec plateformes tournantes (défilement répété droite/gauche pour détecter les copies et la disparition), Koopas et autres ennemis à droite avant le bord natif, item de réserve centré, eau BG3 complète, 4:3, sous-niveau bonus. **Les sprites complexes dont le code n'émet pas d'indice hôte n'apparaîtront pas nécessairement dans les marges.** Cette solution corrige une ambiguïté de rendu, mais ne remplace pas l'architecture de dessins OAM indépendants de SuperMarioWorldRecomp pour tous les objets.
 
+## Jalon 8 : capture OAM par acteur, après le constat de scintillement
+
+Retour utilisateur `743d2a6` : plateformes et gros mobs (Bullet Bills) scintillent par colonnes verticales à l'intérieur du 256px, ailes de Koopas à des endroits absurdes, ennemis toujours majoritairement absents des marges ; amélioration confirmée : plus de plateforme de gauche dupliquée à droite. Trace obtenue `WS spawn frame=78 record=11 id=4F world=1808 camera=1450 status=1 blocked=0` prouve le chargement à X écran 358, pas son dessin.
+
+Nouvelle stratégie d'après `mstan/SuperMarioWorldRecomp` : ne plus déplacer les objets dans `ppu_evaluateSprites` via un indice par OAM mutable. Capturer après chaque `ProcessNormalSprites_HandleSprite` les pièces OAM modifiées (leur image finale, le X signé calculé par l'acteur, tailles), avant le prochain acteur. Rendre ces images **uniquement dans la marge droite** et préserver les 256px centraux par le PPU original. Les plateformes complexes nécessitent des indices de X propres à leurs morceaux. Limite du prototype : la détection de changements ne capture pas toute la logique amont, pas encore les sprites étendus. Mode 4:3, HUD et eau préservés par conception.
+
+Le `SMW_WS_TRACE` existant ne trace que les tentatives réussies/échouées du préchargeur, pas chaque image de sprite ; un unique log est donc normal. Évaluer les captures avec un test Windows ; ne pas affirmer corrigé avant validation.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

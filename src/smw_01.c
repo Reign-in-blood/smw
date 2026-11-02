@@ -4,6 +4,7 @@
 #include "variables.h"
 #include "assets/smw_assets.h"
 #include "snes/ppu.h"
+#include <string.h>
 
 void (*kUnk_18137[13])(uint8) = {
     &SprStatus00_EmptySlot,   &SprStatus01_Init,         &SprStatus02_Dead,
@@ -783,7 +784,23 @@ void ProcessNormalSprites() {  // 01808c
   for (int8 i = 11; i >= 0; --i) {
     spr_current_slotid = i;
     ProcessNormalSprites_GetNormalSpriteOAMIndexAndDecrementTimers(i);
+    // SMW reuses native OAM tile slots, notably on large moving sprites.
+    // Save the image before this actor runs; capture the changed tiles
+    // immediately afterwards, before the next actor overwrites them.
+    uint8_t oam_before[256], size_before[64];
+    if (g_ppu->requestedExtra) {
+      memcpy(oam_before, g_ram + 0x300, sizeof(oam_before));
+      memcpy(size_before, sprites_oamtile_size_buffer + 64, sizeof(size_before));
+    }
     ProcessNormalSprites_HandleSprite(i);
+    if (g_ppu->requestedExtra && spr_current_status[i]) {
+      int origin_x = (int16)(GetSprXPos(i) - mirror_current_layer1_xpos);
+      uint8 id = spr_spriteid[i];
+      bool complex = id == 0x5f || id == 0x9e || id == 0xa3;
+      PpuWidescreenCaptureActor(g_ppu, origin_x, complex,
+          oam_before, size_before, g_ram + 0x300,
+          sprites_oamtile_size_buffer + 64);
+    }
   }
   if (flag_run_cluster_sprites)
     ProcessClusterSprites();

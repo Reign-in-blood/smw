@@ -140,6 +140,14 @@ struct Ppu {
   // Screen-space X for OAM tiles beyond the SNES 256px right edge.
   // Zero means use the original OAM 9-bit signed coordinate.
   uint16_t widescreenOamX[128];
+  // Capture the *completed* image of each normal actor before another
+  // actor reuses its native OAM entries. These host-only right-margin
+  // drawings do not modify guest RAM, native OAM or 4:3 presentation.
+  struct {
+    int16_t x;
+    uint8_t y, tile, flags, size, slot;
+  } widescreenDraws[512];
+  uint16_t widescreenDrawCount;
   uint8_t lastMosaicModulo;
   uint8_t lastBrightnessMult;
   bool lineHasSprites;
@@ -238,6 +246,11 @@ void PpuBeginDrawing(Ppu *ppu, uint8_t *pixels, size_t pitch, uint32_t render_fl
 void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side);
 void PpuWidescreenClearOamX(Ppu *ppu);
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x);
+// old/now OAM point at the 64 normal-sprite tiles (0x300..0x3ff),
+// old/now size at 0x460..0x49f. Capture immediately after each actor.
+void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,
+    const uint8_t *old_oam, const uint8_t *old_size,
+    const uint8_t *now_oam, const uint8_t *now_size);
 
 int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 

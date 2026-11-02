@@ -74,11 +74,49 @@ void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side) {
 // This data is not serialized or written into the emulated SNES OAM.
 void PpuWidescreenClearOamX(Ppu *ppu) {
   memset(ppu->widescreenOamX, 0, sizeof(ppu->widescreenOamX));
+  ppu->widescreenDrawCount = 0;
 }
 
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x) {
   if (ppu->requestedExtra && x >= 256 && x < 256 + ppu->requestedExtra)
     ppu->widescreenOamX[oam_byte_offset >> 2] = (uint16_t)x;
+}
+
+// Inspired by the per-actor completed-OAM ownership in SuperMarioWorldRecomp.
+// The guest shares 64 high OAM entries between sprites. Copying only the final
+// guest buffer loses earlier actors and makes right-margin parts flicker.
+// Here we capture every changed piece *before* its slot can be reused, with
+// a signed world-space origin. Only the right-margin portions are emitted.
+void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,
+    const uint8_t *old_oam, const uint8_t *old_size,
+    const uint8_t *now_oam, const uint8_t *now_size) {
+  if (!ppu->requestedExtra)
+    return;
+  for (int i = 0; i < 64; i++) {
+    const uint8_t *tile = now_oam + i * 4;
+    if (tile[1] == 0xf0 ||
+        (!memcmp(tile, old_oam + i * 4, 4) && now_size[i] == old_size[i]))
+      continue;
+    // The original OAM X is only 8 bits. Recover the actual per-tile
+    // position relative to this actor, using the signed 8-bit displacement.
+    int x = origin_x + (int8_t)(tile[0] - (uint8_t)origin_x);
+    uint16_t known_x = ppu->widescreenOamX[64 + i];
+    if (known_x && (uint8_t)known_x == tile[0])
+      x = (int16_t)known_x;
+    else if (complex_sprite)
+      continue; // Complex tiles need exact per-tile provenance.
+    if (x < 256 || x >= 256 + ppu->requestedExtra)
+      continue;
+    if (ppu->widescreenDrawCount == 512)
+      break;
+    int n = ppu->widescreenDrawCount++;
+    ppu->widescreenDraws[n].x = (int16_t)x;
+    ppu->widescreenDraws[n].y = tile[1];
+    ppu->widescreenDraws[n].tile = tile[2];
+    ppu->widescreenDraws[n].flags = tile[3];
+    ppu->widescreenDraws[n].size = now_size[i];
+    ppu->widescreenDraws[n].slot = (uint8_t)(64 + i);
+  }
 }
 
 bool ppu_checkOverscan(Ppu* ppu) {
@@ -786,6 +824,60 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
 
 }
 
+// Draw host-captured normal actor tiles in the right margin only.
+// The stock 256px center is never repainted, and the native OAM/VRAM
+// are left intact. This keeps overlapping draws from reused OAM slots.
+static bool ppu_drawCapturedWidescreenSprites(Ppu *ppu, int line) {
+  if (!ppu->extraRightCur || !ppu->widescreenDrawCount)
+    return false;
+  static const uint8_t sizes[8][2] = {
+    {8, 16}, {8, 32}, {8, 64}, {16, 32},
+    {16, 64}, {32, 64}, {16, 32}, {16, 32}
+  };
+  bool rendered = false;
+  for (int i = 0; i < ppu->widescreenDrawCount; i++) {
+    const int x = ppu->widescreenDraws[i].x;
+    const int y = ppu->widescreenDraws[i].y;
+    const uint8_t tile = ppu->widescreenDraws[i].tile;
+    const uint8_t flags = ppu->widescreenDraws[i].flags;
+    const int size = sizes[PPU_objSize(ppu)][(ppu->widescreenDraws[i].size >> 1) & 1];
+    const int height = PPU_objInterlace(ppu) ? size / 2 : size;
+    int row = (uint8_t)(line - y);
+    if (row >= height)
+      continue;
+    if (PPU_objInterlace(ppu))
+      row = row * 2 + (ppu->evenFrame ? 0 : 1);
+    if (flags & 0x80)
+      row = size - 1 - row;
+    int objAdr = (flags & 1) ? PPU_objTileAdr2(ppu) : PPU_objTileAdr1(ppu);
+    int priority = SPRITE_PRIO_TO_PRIO((flags >> 4) & 3, (flags & 8) == 0);
+    PpuZbufType z = 0x80 + 16 * ((flags >> 1) & 7) + (priority << 8);
+    for (int col = 0; col < size; col += 8) {
+      int partx = x + col;
+      if (partx >= 256 + ppu->extraRightCur)
+        break;
+      int used_col = (flags & 0x40) ? size - 1 - col : col;
+      int used_tile = (((tile >> 4) + (row >> 3)) << 4) |
+                      (((tile & 15) + (used_col >> 3)) & 15);
+      const uint16_t *addr = &ppu->vram[(objAdr + used_tile * 16 + (row & 7)) & 0x7fff];
+      uint32_t plane = addr[0] | addr[8] << 16;
+      int lastpx = IntMin(8, 256 + ppu->extraRightCur - partx);
+      PpuZbufType *dst = ppu->objBuffer.data + partx + kPpuExtraLeftRight;
+      for (int px = 0; px < lastpx; px++) {
+        int shift = (flags & 0x40) ? px : 7 - px;
+        uint32_t bits = plane >> shift;
+        int pixel = (bits & 1) | ((bits >> 7) & 2) |
+                    ((bits >> 14) & 4) | ((bits >> 21) & 8);
+        if (pixel && !(dst[px] & 0xff)) {
+          dst[px] = z + pixel;
+          rendered = true;
+        }
+      }
+    }
+  }
+  return rendered;
+}
+
 static bool ppu_evaluateSprites(Ppu* ppu, int line) {
   static const uint8 spriteSizes[8][2] = {
     {8, 16}, {8, 32}, {8, 64}, {16, 32},
@@ -820,18 +912,9 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       // Use the native signed decode unless a C sprite draw supplies its
       // independently computed signed world-space X below.
       if (x >= 256) x -= 512;
-      // The host-side marker distinguishes an actual X>255 on the right
-      // from the SNES negative-X encoding used for objects on the left.
-      // Only 16:9 mode writes markers; the 4:3 path remains unmodified.
-      // SMW reuses OAM entries during a frame (e.g. the reserve-box item
-      // at X=120, Y=15 may replace a gameplay tile). A host X hint is
-      // valid only while its low eight bits match the CURRENT OAM tile.
-      // Otherwise an earlier world-space X can move a HUD item whenever
-      // the camera crosses a screen boundary.
-      uint16_t host_x = ppu->widescreenOamX[index >> 1];
-      if (ppu->requestedExtra && host_x &&
-          (uint8_t)host_x == (uint8_t)ppu->oam[index])
-        x = host_x;
+      // Do not reinterpret mutable OAM slots with host X hints here.
+      // Extra right-margin sprites are drawn from completed per-actor
+      // captures after the native SNES pass instead.
       // if in x-range
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already
@@ -888,7 +971,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
     }
     index += 2;
   }
-  return tilesFound != 0;
+  return tilesFound != 0 || ppu_drawCapturedWidescreenSprites(ppu, line);
 }
 
 static uint16_t ppu_getVramRemap(Ppu* ppu) {
