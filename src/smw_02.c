@@ -2,6 +2,7 @@
 #include "funcs.h"
 #include "smw_rtl.h"
 #include "variables.h"
+#include "config.h"
 
 void (*kProcessMinorExtendedSprites_MinorExtendedSpritesPtrs[12])(uint8 k) = {
     &ProcessMinorExtendedSprites_Return, &MExtSpr01_BrickPiece,  &MExtSpr02_SmallStar,   &MExtSpr03_EggShell,
