@@ -214,6 +214,8 @@ Le `SMW_WS_TRACE` existant ne trace que les tentatives réussies/échouées du p
 
 **Priorité haute pour les régressions précédentes :** `PpuWidescreenSetOamX` enregistrait l'index `byte_offset >> 2` dans `widescreenOamX[0..63]`, mais tous les appelants ordinaires utilisent les **slots OAM supérieurs 64..127** via `oam_buf[64]`. L'index correct est `64 + (byte_offset >> 2)`. Ancien comportement : sprites sans indication de X à droite ; fuites potentielles vers les éléments du HUD gérés dans la moitié basse. Deuxième bug certain : `return tilesFound != 0 || ppu_drawCapturedWidescreenSprites(...)` ne lançait pas le moteur de capture si un sprite natif était déjà présent sur la ligne (court-circuit de `||`). Corrigé en appel indépendant suivi de la combinaison des booléens. Exiger une recompilation et test Windows avant de considérer la capture prête.
 
+**Diagnostic supplémentaire** : avec `SMW_WS_TRACE=1`, une ligne `WS render frames=N right_oam_pieces=M` apparaît toutes les 120 frames ; `M` est le nombre de morceaux de sprites normaux capturés pour la marge droite **dans cette frame**, pas le nombre d'ennemis vivants. Le log `WS spawn` n'apparaît que lors d'un événement de spawn et peut légitimement n'être imprimé qu'une fois. Un `M=0` répété dans une scène où un sprite devrait être à droite oriente vers la capture/le dessin. Relever aussi les frames où `M>0`, les défauts 4:3 et les plateformes.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

@@ -199,6 +199,16 @@ void ppu_runLine(Ppu* ppu, int line) {
     } else {
       PpuDrawWholeLineOldPpu(ppu, line);
     }
+    // An optional low-volume rendering diagnostic, distinct from the
+    // event-only "WS spawn" trace. The count shows that the actual
+    // per-actor right-margin captures have reached the renderer.
+    if (line == 224 && ppu->requestedExtra) {
+      static unsigned trace_frame;
+      const char *trace = getenv("SMW_WS_TRACE");
+      if (trace && trace[0] == '1' && (++trace_frame % 120) == 0)
+        printf("WS render frames=%u right_oam_pieces=%u\n",
+            trace_frame, (unsigned)ppu->widescreenDrawCount);
+    }
   }
 }
 
