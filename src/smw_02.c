@@ -2952,9 +2952,13 @@ void LoadSublevel_02A751() {  // 02a751
   }
 }
 
+static void SmwWidescreenLoadPlacedSprites(void);
+
 void ParseLevelSpriteList() {  // 02a7fc
-  if ((counter_global_frames & 1) == 0)
+  if ((counter_global_frames & 1) == 0) {
     ParseLevelSpriteList_Entry2();
+    SmwWidescreenLoadPlacedSprites();
+  }
 }
 
 void ParseLevelSpriteList_Entry2() {  // 02a802
@@ -3079,6 +3083,66 @@ bool LoadOneSprite(const uint8 *p, uint8 k, PointU16 pt) {
     spr_table187b[v10] = lm_var_0054 & 0xd;
   }
   return false;
+}
+
+
+// Each placed sprite has a source-list index. Do not respawn a killed or
+// transformed sprite repeatedly while the original placement is still within
+// the expanded activation range. The normal load-status array alone cannot
+// provide this guarantee: several game routines clear it when a sprite dies.
+static uint8 g_widescreen_spawn_guard[64];
+
+void SmwWidescreenResetSpawnGuards(void) {
+  memset(g_widescreen_spawn_guard, 0, sizeof(g_widescreen_spawn_guard));
+}
+
+static void SmwWidescreenLoadPlacedSprites(void) {
+  if (!g_config.extended_aspect_ratio || g_lunar_magic ||
+      (misc_level_layout_flags & 1) || (misc_nmito_use_flag & 0x80) ||
+      flag_sprites_locked)
+    return;
+
+  // Original camera is 256 pixels wide. Extra columns are visible on each
+  // side; start normal enemies 32 pixels before they enter the 398px view.
+  const int side = g_config.extended_aspect_ratio + 32;
+  const int left = IntMax(0, (int)mirror_current_layer1_xpos - side);
+  const int right = (int)mirror_current_layer1_xpos + 256 + side;
+
+  const uint8 *list = GetSpriteListPtr();
+  // Standard SMW levels have at most 64 source-list sprite slots, matching
+  // the load status initialized in InitializeAllSpritesOnLevelLoad.
+  for (uint8 index = 0; index < 64; index++) {
+    const uint8 *entry = list + 1 + index * 3;
+    if (entry[0] == 0xff)
+      break;
+
+    int world_x = (((8 * entry[0] & 0x10) | (entry[1] & 15)) << 8) |
+                   (entry[1] & 0xf0);
+    if (world_x < left || world_x > right) {
+      g_widescreen_spawn_guard[index] = 0;
+      continue;
+    }
+
+    // Special sprite generators, shooters and multi-spawn objects need their
+    // own lifecycle handling; leave them to the original parser for now.
+    if (entry[2] >= 0xc9)
+      continue;
+
+    if (g_widescreen_spawn_guard[index])
+      continue;
+    if (sprites_load_status[index]) {
+      // The original parser may have already loaded this placement.
+      g_widescreen_spawn_guard[index] = 1;
+      continue;
+    }
+
+    PointU16 pt = {.x = world_x, .y = 0};
+    LoadOneSprite(entry, index, pt);
+    // On a full sprite slot, LoadOneSprite clears the status; retry on a
+    // subsequent frame rather than permanently losing the enemy.
+    if (sprites_load_status[index])
+      g_widescreen_spawn_guard[index] = 1;
+  }
 }
 
 void ParseLevelSpriteList_LoadSpriteLoopStrt(uint8 spr_index, uint8 j, PointU16 pt) {  // 02a82e
@@ -3236,6 +3300,7 @@ void SprXXX_LoadShooter(uint8 k, uint8 a, PointU16 pt, const uint8 *edata) {  //
 }
 
 void InitializeAllSpritesOnLevelLoad() {  // 02abf2
+  SmwWidescreenResetSpawnGuards();
   for (int8 i = 63; i >= 0; --i)
     sprites_load_status[(uint8)i] = 0;
   uint8 r0 = -1;
@@ -5362,6 +5427,8 @@ LABEL_10:
       if ((spr_property_bits167a[k] & 4) != 0)
         return;
     }
+    if (SmwWidescreenKeepSpriteAlive(k))
+      return;
     uint8 r1 = r3 | counter_global_frames & 1;
     uint16 xpos = PAIR16(kSubOffscreen_Bank02_DATA_02D00F[r1], kSubOffscreen_Bank02_DATA_02D007[r1]) +
         mirror_current_layer1_xpos - GetSprXPos(k);
@@ -5551,7 +5618,8 @@ PointU8 AimTowardsPlayer_Bank23(uint8 k, uint8 a) {  // 02d2fb
 GetDrawInfoRes GetDrawInfo_Bank23_ReturnsTwice(uint8 k) {  // 02d378
   spr_yoffscreen_flag[k] = 0;
   spr_xoffscreen_flag[k] = (uint16)(GetSprXPos(k) - mirror_current_layer1_xpos) >= 256;
-  bool carry = (uint16)(GetSprXPos(k) - mirror_current_layer1_xpos + 0x40) >= 0x180;
+  bool carry = (uint16)(GetSprXPos(k) - mirror_current_layer1_xpos + 0x40) >= 0x180 &&
+               !SmwWidescreenKeepSpriteAlive(k);
   spr_table15c4[k] = carry;
   if (carry) {
     return (GetDrawInfoRes) { .idx = 0xff, .x = 0, .y = 0 };

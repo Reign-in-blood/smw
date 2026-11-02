@@ -103,6 +103,17 @@ Lire [`docs/WIDESCREEN_PROTOTYPE.md`](../../../docs/WIDESCREEN_PROTOTYPE.md) ava
 - Ne pas considérer ces observations comme des validations générales : les VRAM/Map16, les ennemis, le HUD et les scènes spéciales restent à examiner.
 - Dans `[KeyMap]`, le nom de commande reconnu est `ToggleRenderer = r` et **non** `NewRenderer = r`. Dans `[Graphics]`, `NewRenderer = 1` reste un booléen.
 
+
+## Jalon suivant — activation anticipée des ennemis (2 novembre 2026)
+
+Première implémentation dans `src/smw_02.c` : pour les niveaux **horizontaux classiques**, le parseur original conserve son fonctionnement, puis une analyse supplémentaire du fichier de placements charge les ennemis ordinaires lorsque leur position entre dans la zone étendue de 398 pixels plus **32 pixels de sécurité par côté**. Un garde-fou par index de placement évite de recréer en boucle un ennemi éliminé tant que son emplacement reste dans la zone d'activation ; il est réinitialisé au chargement d'un niveau et lorsqu'un placement quitte la zone.
+
+`src/smw_rtl.c::SmwWidescreenKeepSpriteAlive` élargit la durée de conservation horizontale. Les trois banques de routines `SubOffscreen_Bank01/02/03` utilisent ce test mais continuent leurs propres contrôles de hauteur et propriétés. `GetDrawInfo_Bank01` et `GetDrawInfo_Bank23` n'écartent plus automatiquement les objets dont la position appartient encore à cette plage.
+
+**Restrictions :** générateurs, shooters et sprites spéciaux, niveaux verticaux, patches Lunar Magic, scènes Mode 7 exclus du chargement anticipé. Nombre de slots standard conservé (12). Les coordonnées OAM SNES à 9 bits, les assemblages graphiques, les collisions et les limites de streaming restent sujets à vérification ; la nouvelle logique ne garantit pas que tous les monstres s'affichent parfaitement aux bords. Gardes d'activation non sérialisés dans les savestates, à traiter après test. Aucun test Windows réalisé par l'assistant.
+
+**Essais prioritaires :** Yoshi's Island 1/2 : avancer vers un Koopa puis reculer et revenir ; tuer le Koopa et rester à proximité (pas de respawn immédiat) ; sortir de sa zone puis revenir ; faire défiler un ennemi au-delà du bord droit/gauche en 16:9 et vérifier son retour ; comparer `4:3` ; reprendre une sauvegarde ; capturer les ennemis invisibles / graphiques erronés.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

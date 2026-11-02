@@ -24,6 +24,11 @@ void SmwCopyFromVram(uint16 vram_addr, uint8 *dst, int n);
 void SmwDrawPpuFrame(void);
 void SmwRunOneFrameOfGame(void);
 
+// Experimental SMW 16:9 sprite activation/despawn helpers.
+// Preserve the stock 4:3 logic whenever the option is disabled.
+bool SmwWidescreenKeepSpriteAlive(uint8 k);
+void SmwWidescreenResetSpawnGuards(void);
+
 extern bool g_did_finish_level_hook;
 
 void AddSprXPos(uint8 k, uint16 x);

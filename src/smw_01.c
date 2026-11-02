@@ -3042,8 +3042,9 @@ GetDrawInfoRes GetDrawInfo_Bank01_ReturnsTwice(uint8 k) {  // 01a365
   uint8 r1 = spr_ypos_lo[k] - mirror_current_layer1_ypos;
 
   uint16 tx = GetSprXPos(k) + 0x40 - mirror_current_layer1_xpos;
-  spr_table15c4[k] = (tx >= 0x180);
-  if (tx >= 0x180) {
+  bool skip_draw = (tx >= 0x180) && !SmwWidescreenKeepSpriteAlive(k);
+  spr_table15c4[k] = skip_draw;
+  if (skip_draw) {
     return (GetDrawInfoRes) { .idx = 0xff, .x = r0, .y = r1 };
   } else {
     uint8 v2 = (spr_current_status[k] != 9 && (spr_property_bits190f[k] & 0x20) != 0) ? 1 : 0;
@@ -3695,7 +3696,8 @@ void SubOffscreen_Bank01_01AC33(uint8 k, uint8 r3) {  // 01ac33
       bool want_erase = g_lunar_magic ? LmHook_WantEraseSprite(k, y) : !sign8(((y + 80) >> 8) - 2);
       if (want_erase) {
         SubOffscreen_Bank01_EraseSprite(k);
-      } else if ((spr_property_bits167a[k] & 4) == 0) {
+      } else if ((spr_property_bits167a[k] & 4) == 0 &&
+                 !SmwWidescreenKeepSpriteAlive(k)) {
         uint8 v4 = r3 | counter_global_frames & 1;
         uint16 t = PAIR16(kSubOffscreen_Bank01_SpriteOffScreen2_Hi[v4], kSubOffscreen_Bank01_SpriteOffScreen2_Lo[v4]) +
             mirror_current_layer1_xpos - GetSprXPos(k);

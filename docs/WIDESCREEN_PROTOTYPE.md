@@ -44,3 +44,9 @@ Try title screen (256-pixel fallback expected), Yoshi's Island 1 and 2, enemy po
 - https://github.com/mstan/SuperMarioWorldRecomp/blob/main/docs/adaptive-renderer.md — an alternative Map16/OAM host rendering approach
 
 Next: validate compilation and 4:3 parity, fix tile streaming, sprites/spawns, HUD and transitions in separate commits.
+
+## Milestone 2 — enemy spawn/despawn preview
+
+Placed ordinary enemies in stock horizontal levels are now preloaded inside the 398-pixel visible area plus 32 pixels beyond each side; the original loader and 12 normal sprite slots are preserved. Death/erase guards avoid repeated loading while a placement remains within the activation area, and the three normal offscreen-removal banks use the expanded boundary without overriding vertical removal. Drawing culls in Bank01 and Bank23 are also relaxed to the expanded boundary.
+
+**Unverified:** Build TCC/Windows and observe on Yoshi's Island 1/2. Special sprites, generators, shooters, vertical levels, Lunar Magic and Mode 7 are unchanged. Guard state is not stored in savestates. OAM coordinate limitations may still hide objects despite earlier loading. Test a killed Koopa for immediate respawn, and move camera away and back; report exact level and screenshot.

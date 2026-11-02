@@ -1,5 +1,6 @@
 #include "smw_rtl.h"
 #include "variables.h"
+#include "config.h"
 #include <time.h>
 #include "common_cpu_infra.h"
 #include "snes/snes.h"
@@ -30,6 +31,18 @@ void AddSprXYPos(uint8 k, uint16 x, uint16 y) {
 
 uint16 GetSprXPos(uint8 k) {
   return PAIR16(spr_xpos_hi[k], spr_xpos_lo[k]);
+}
+
+// A sprite is considered active until it is completely outside the visible
+// expanded view plus a 32-pixel lookahead on either side. Positions are
+// compared relative to the original SNES camera, without moving that camera.
+bool SmwWidescreenKeepSpriteAlive(uint8 k) {
+  if (!g_config.extended_aspect_ratio || g_lunar_magic ||
+      (misc_level_layout_flags & 1) || (misc_nmito_use_flag & 0x80))
+    return false;
+  int side = g_config.extended_aspect_ratio + 32;
+  int16 screen_x = (int16)(GetSprXPos(k) - mirror_current_layer1_xpos);
+  return screen_x >= -side && screen_x <= 256 + side;
 }
 
 uint16 GetSprYPos(uint8 k) {

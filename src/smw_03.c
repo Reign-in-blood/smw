@@ -3479,7 +3479,8 @@ void SubOffscreen_Bank03_03B85F(uint8 k, uint8 r3) {  // 03b85f
     bool want_erase = g_lunar_magic ? LmHook_WantEraseSprite(k, y) : !sign8(((y + 80) >> 8) - 2);
     if (want_erase)
       goto LABEL_8;
-    if ((spr_property_bits167a[k] & 4) == 0) {
+    if ((spr_property_bits167a[k] & 4) == 0 &&
+        !SmwWidescreenKeepSpriteAlive(k)) {
       uint8 r1 = r3 | counter_global_frames & 1;
       uint16 xpos =
           PAIR16(kSubOffscreen_Bank03_DATA_03B847[r1], kSubOffscreen_Bank03_DATA_03B83F[r1]) + mirror_current_layer1_xpos - GetSprXPos(k);
