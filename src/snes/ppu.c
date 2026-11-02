@@ -69,6 +69,18 @@ void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side) {
   ppu->requestedExtra = (uint8_t)IntMin(IntMax(extra_pixels_per_side, 0), kPpuExtraLeftRight);
 }
 
+// PC-only information: native OAM maps X >= 256 to a *negative* signed
+// coordinate. Retain the true right-side position for tiles drawn by SMW C.
+// This data is not serialized or written into the emulated SNES OAM.
+void PpuWidescreenClearOamX(Ppu *ppu) {
+  memset(ppu->widescreenOamX, 0, sizeof(ppu->widescreenOamX));
+}
+
+void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x) {
+  if (ppu->requestedExtra && x >= 256 && x < 256 + ppu->requestedExtra)
+    ppu->widescreenOamX[oam_byte_offset >> 2] = (uint16_t)x;
+}
+
 bool ppu_checkOverscan(Ppu* ppu) {
   // called at (0,225)
   ppu->frameOverscan = PPU_overscan(ppu); // set if we have a overscan-frame
@@ -792,6 +804,11 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       int x = ppu->oam[index] & 0xff;
       x |= ((ppu->highOam[index >> 3] >> (index & 7)) & 1) << 8;
       if(x > 255) x -= 512;
+      // The host-side marker distinguishes an actual X>255 on the right
+      // from the SNES negative-X encoding used for objects on the left.
+      // Only 16:9 mode writes markers; the 4:3 path remains unmodified.
+      if (ppu->requestedExtra && ppu->widescreenOamX[index >> 1])
+        x = ppu->widescreenOamX[index >> 1];
       // if in x-range
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already

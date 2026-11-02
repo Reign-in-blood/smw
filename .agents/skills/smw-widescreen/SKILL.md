@@ -122,6 +122,16 @@ Un second correctif relie `g_widescreen_spawn_guard` au parseur de sprites d'ori
 
 **À valider :** compilation TCC, apparition de la ligne de console `Experimental widescreen: native C gameplay only; ROM/C comparison disabled.`, comparaison 4:3, ennemi qui entre depuis la droite, ennemis éliminés, déplacement caméra aller/retour. L'absence de warnings en mode natif ne garantit pas le succès ; vérifier l'écran et la physique.
 
+## Tests utilisateur et traitement du jalon 3 (2 novembre 2026)
+
+**Retour utilisateur confirmé** sur le correctif précédent : les ennemis ordinaires n'apparaissent toujours pas dans les marges 16:9. En faisant défiler la caméra de droite à gauche puis en sens inverse, un ennemi encore actif peut coexister avec une copie réapparue à son ancien point de placement. **À revalider** après la correction du garde de chargement.
+
+**Autre régression observée, volontairement différée** : dans un petit niveau bonus accessible par un tuyau, la roue de blocs à frapper est placée trop haut pour être atteinte et de nombreux éléments graphiques sont incorrects. Il s'agit d'un bug bloquant pour ce sous-niveau ; conserver une entrée de suivi pour l'analyse des niveaux bonus, transitions, scrolling et mise en page, après correction des ennemis. Ne pas le considérer comme résolu.
+
+**Analyse technique :** `src/snes/ppu.c::ppu_evaluateSprites` décode l'OAM 9 bits `x>255` en `x-512`, donc le terrain étendu à droite n'implique pas que les sprites puissent apparaître à `x=256..327`. Nouveau jalon : table **hôte uniquement** `Ppu::widescreenOamX[128]`, remise à zéro avant chaque frame, complétée par les chemins C `FinishOAMWrite` et les routines génériques 1 et 2 tuiles. Le PPU remplace la coordonnée OAM uniquement si le moteur connaît une position à droite du champ natif. L'OAM original, les savestates SNES et le mode 4:3 restent inchangés.
+
+Le garde de spawn vérifie maintenant les 12 slots réellement actifs et ne réinitialise l'identité d'un placement hors fenêtre que si aucun ennemi issu de ce placement n'est encore vivant. **Limites** : chemins de dessin spéciaux, sprites supplémentaires, limites OAM SNES, état des gardes non sérialisé ; autres anomalies graphiques et niveau bonus toujours non corrigés. Ne pas déclarer « fonctionnel » sans nouveau test TCC Windows.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

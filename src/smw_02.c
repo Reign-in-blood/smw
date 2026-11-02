@@ -3093,6 +3093,16 @@ bool LoadOneSprite(const uint8 *p, uint8 k, PointU16 pt) {
 // provide this guarantee: several game routines clear it when a sprite dies.
 static uint8 g_widescreen_spawn_guard[64];
 
+static bool SmwWidescreenSpriteAlreadyActive(uint8 index) {
+  // The source-list index stays attached to normal sprite slots while they
+  // are alive, even if the original load-status byte gets cleared.
+  for (int slot = 0; slot < 12; slot++) {
+    if (spr_current_status[slot] && spr_load_status_table_index[slot] == index)
+      return true;
+  }
+  return false;
+}
+
 void SmwWidescreenResetSpawnGuards(void) {
   memset(g_widescreen_spawn_guard, 0, sizeof(g_widescreen_spawn_guard));
 }
@@ -3120,7 +3130,10 @@ static void SmwWidescreenLoadPlacedSprites(void) {
     int world_x = (((8 * entry[0] & 0x10) | (entry[1] & 15)) << 8) |
                    (entry[1] & 0xf0);
     if (world_x < left || world_x > right) {
-      g_widescreen_spawn_guard[index] = 0;
+      // The enemy may have walked away from its original position but
+      // still be alive. Keep its identity until it is really removed.
+      if (!SmwWidescreenSpriteAlreadyActive(index))
+        g_widescreen_spawn_guard[index] = 0;
       continue;
     }
 
@@ -3131,7 +3144,7 @@ static void SmwWidescreenLoadPlacedSprites(void) {
 
     if (g_widescreen_spawn_guard[index])
       continue;
-    if (sprites_load_status[index]) {
+    if (sprites_load_status[index] || SmwWidescreenSpriteAlreadyActive(index)) {
       // The original parser may have already loaded this placement.
       g_widescreen_spawn_guard[index] = 1;
       continue;
@@ -3159,7 +3172,8 @@ void ParseLevelSpriteList_LoadSpriteLoopStrt(uint8 spr_index, uint8 j, PointU16 
         return;
       if ((p[j + 1] & 0xF0) == (uint8)pt.x && !sprites_load_status[spr_index] &&
           !(g_config.extended_aspect_ratio && !g_lunar_magic &&
-            spr_index < 64 && g_widescreen_spawn_guard[spr_index])) {
+            spr_index < 64 && (g_widescreen_spawn_guard[spr_index] ||
+                               SmwWidescreenSpriteAlreadyActive(spr_index)))) {
         // Do not immediately respawn a placement that was activated early
         // and subsequently killed inside the widened viewport.
         if (LoadOneSprite(p + j, spr_index, pt))

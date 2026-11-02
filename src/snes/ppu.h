@@ -134,6 +134,9 @@ struct Ppu {
 
   uint8_t extraLeftCur, extraRightCur, extraLeftRight;
   uint8_t requestedExtra;  // host-only, excluded from savestate ranges
+  // Screen-space X for OAM tiles beyond the SNES 256px right edge.
+  // Zero means use the original OAM 9-bit signed coordinate.
+  uint16_t widescreenOamX[128];
   uint8_t lastMosaicModulo;
   uint8_t lastBrightnessMult;
   bool lineHasSprites;
@@ -230,6 +233,8 @@ void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val);
 void ppu_saveload(Ppu *ppu, SaveLoadInfo *sli);
 void PpuBeginDrawing(Ppu *ppu, uint8_t *pixels, size_t pitch, uint32_t render_flags);
 void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side);
+void PpuWidescreenClearOamX(Ppu *ppu);
+void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x);
 
 int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 

@@ -58,3 +58,13 @@ The previous milestone 2 triggered `Memory compare failed`, `VRAM OAM compare fa
 When `ExtendedAspectRatio = 16:9`, **SMW now runs the reimplemented C simulation alone** (native mode), with a one-time console explanation. The ROM-vs-C verifier is unchanged for the standard `4:3` mode; do not interpret no verifier warnings in 16:9 as proof of gameplay correctness. The original sprite loader now also honors the widened loader's per-placement guard, preventing a native-range load from duplicating an enemy recently killed inside the wide activation zone.
 
 **Retest required:** Build with TCC, confirm exactly one `Experimental widescreen: native C gameplay only; ROM/C comparison disabled.` line at game start, verify early spawning on Yoshi's Island 1/2 and whether extra sprites render in the right/left margins. Compare against `4:3`, where that line must not appear. Check death/respawn and save/load. If sprites remain absent, investigate OAM/graphics coordinates rather than suppressing diagnostics.
+
+## Milestone 3 — OAM right margin and spawn identity (awaiting Windows validation)
+
+**User observations (previous commit):** normal enemies remain absent from the wide margins; repeated left/right camera movement can produce duplicate living mobs; a bonus pipe room with a rotating ring of hittable blocks is broken (blocks too high and significant graphics corruption). The bonus-room bug is **deferred but tracked as a serious gameplay regression**.
+
+The PPU originally interprets 9-bit OAM X values >=256 as negative (X-512). That makes the extended right margin inaccessible to sprites that only use the classic OAM encoding. The host PPU now accepts a per-tile **right-side X hint**, recorded by SMW C sprite draw paths (FinishOAMWrite and common one-/two-tile graphics), reset at the start of each game frame, and used only in widescreen PPU mode. Original SNES OAM bytes remain unchanged.
+
+The extra sprite loader now checks whether a source index still belongs to an active normal sprite slot, even when load status has been cleared, before allowing duplicate spawning. Its placement guard is no longer cleared when the placement leaves the activation region but its enemy remains alive.
+
+**Tests:** compile with TCC; check a basic Koopa appearing toward the right outside the old 256px area, moving into the old field, then back. Walk left/right to check duplicate enemies, kill an enemy and inspect return behavior. The change does *not* yet cover special drawing paths, alternative OAM routines or the bonus-room regression. Verify 4:3 parity. If all enemies still pop in at the old border, inspect the remaining OAM paths and the scene mode.

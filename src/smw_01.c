@@ -3,6 +3,7 @@
 #include "smw_rtl.h"
 #include "variables.h"
 #include "assets/smw_assets.h"
+#include "snes/ppu.h"
 
 void (*kUnk_18137[13])(uint8) = {
     &SprStatus00_EmptySlot,   &SprStatus01_Init,         &SprStatus02_Dead,
@@ -2640,6 +2641,10 @@ void GenericGFXRtDraw2Tiles16x16sStacked_019DA9(uint8 k, uint8 j, uint8 r0) {  /
     v4 |= 0x40;
   oam[64].flags = v4;
   oam[65].flags = v4;
+  // This common two-tile path does not call FinishOAMWrite.
+  int screen_x = (int16)(GetSprXPos(k) - mirror_current_layer1_xpos);
+  PpuWidescreenSetOamX(g_ppu, j, screen_x);
+  PpuWidescreenSetOamX(g_ppu, (uint8)(j + 4), screen_x);
   uint8 v5 = j >> 2;
   uint8 v6 = spr_xoffscreen_flag[k] | 2;
   sprites_oamtile_size_buffer[v5 + 64] = v6;
@@ -2736,6 +2741,9 @@ void GenericGFXRtDraw1Tile16x16_019F0F(uint8 k, uint8 r4) {  // 019f0f
   uint8 v3 = spr_current_slotid;
   oam[64].xpos = drt.x;
   oam[64].ypos = drt.y;
+  // Single-tile normal sprites likewise bypass FinishOAMWrite.
+  PpuWidescreenSetOamX(g_ppu, v1,
+      (int16)(GetSprXPos(k) - mirror_current_layer1_xpos));
   uint8 a = spr_table15f6[v3];
   if (!(spr_table157c[k] & 1))
     a ^= 0x40;
@@ -4564,6 +4572,9 @@ void FinishOAMWrite(uint8 k, uint8 j, uint8 a) {  // 01b7bb
     sprites_oamtile_size_buffer[v4 + 64] = v5;
     OamEnt *oam = get_OamEnt(oam_buf, v3);
     uint16 r4w = r2w + (int8)(oam[64].xpos - r7);
+    // Preserve the 9-bit OAM value for SNES compatibility, but let the
+    // widened PPU know when the actual tile is to the right of X=255.
+    PpuWidescreenSetOamX(g_ppu, v3, (int16)(r4w - mirror_current_layer1_xpos));
     if (FinishOAMWrite_01B844(r4w))
       sprites_oamtile_size_buffer[(v3 >> 2) + 64] |= 1;
     if (Spr05F_BrownChainedPlatform_01C9BF(r0w + (int8)(oam[64].ypos - r6)))

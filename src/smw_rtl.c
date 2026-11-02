@@ -104,6 +104,8 @@ void SmwDrawPpuFrame(void) {
 }
 
 void SmwRunOneFrameOfGame(void) {
+  // Refresh host-only right-edge OAM positions before this game's draw calls.
+  PpuWidescreenClearOamX(g_ppu);
   if (*(uint16 *)reset_sprites_y_function_in_ram == 0)
     SmwVectorReset();
   SmwRunOneFrameOfGame_Internal();
