@@ -93,6 +93,16 @@ Un premier incrément expérimental a été ajouté sur `feature/widescreen-16-9
 
 Lire [`docs/WIDESCREEN_PROTOTYPE.md`](../../../docs/WIDESCREEN_PROTOTYPE.md) avant les prochains changements.
 
+## Retours des premiers tests Windows (rapport utilisateur, 2 novembre 2026)
+
+- Le jeu **compile et démarre** avec TCC sous Windows ; avertissement non bloquant `M_PI redefined` depuis stb/TCC.
+- Le terrain supplémentaire sur les côtés est **effectivement visible en niveau**, en mode fenêtré comme en plein écran.
+- Des éléments graphiques supplémentaires remplissent également les marges de certains menus, mais le résultat visuel est incorrect.
+- La touche `R` **existait déjà dans le dépôt original** : elle sélectionne alternativement les moteurs PPU. Le moteur historique affiche les bandes noires latérales, le nouveau moteur affiche les pixels supplémentaires. Ce raccourci n'est pas une commande de ratio 4:3/16:9.
+- L'utilisateur constate une impression de proportions erronées en plein écran ; diagnostic et correction différés.
+- Ne pas considérer ces observations comme des validations générales : les VRAM/Map16, les ennemis, le HUD et les scènes spéciales restent à examiner.
+- Dans `[KeyMap]`, le nom de commande reconnu est `ToggleRenderer = r` et **non** `NewRenderer = r`. Dans `[Graphics]`, `NewRenderer = 1` reste un booléen.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

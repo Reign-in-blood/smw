@@ -61,7 +61,7 @@ Additionally, the following commands are available:
 | T   | Toggle replay turbo mode  |
 | K   | Clear all input history from the joypad log  |
 | L   | Stop replaying a shapshot  |
-| R   | Toggle between fast and slow renderer |
+| R   | Toggle between fast and slow renderer (the experimental 16:9 side view requires the fast renderer) |
 | F   | Display renderer performance |
 | F1-F10 | Load snapshot      |
 | Alt+Enter | Toggle Fullscreen     |
