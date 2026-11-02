@@ -3120,6 +3120,12 @@ static void SmwWidescreenLoadPlacedSprites(void) {
   // disable early *enemy* loading for the whole level. The previous global
   // guard caused every Koopa in a platform level to spawn at the 256px edge.
   const uint8 *list = GetSpriteListPtr();
+  // Independent switch for the newly supported enemy families. Disabling
+  // this group keeps the previously working Koopa loader intact, without
+  // changing the rotating platform / native special-sprite path.
+  const char *extra_enemies_env = getenv("SMW_WS_EXTRA_ENEMIES");
+  bool extra_enemies_enabled =
+      !extra_enemies_env || extra_enemies_env[0] != '0';
 
   // Original camera is 256 pixels wide. Extra columns are visible on each
   // side; start normal enemies 32 pixels before they enter the 398px view.
@@ -3144,17 +3150,12 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       continue;
     }
 
-    // Early-load ordinary enemies, not mechanisms or progression records.
-    // The previous 0x00..0x11-only allowlist excluded common enemies and
-    // caused their visible activation to regress to the original 256px edge.
-    // Keep generators/shooters (>=0xc9), moving platforms (>=0x50),
-    // and gameplay controllers/goal objects on the native load frontier.
+    // The earlier allowlist already enables Koopas, but excludes most
+    // enemies above ID 0x50. That makes Koopas visible in widescreen while
+    // Chucks/Banzai Bills/Wigglers still appear at the native 256px edge.
+    // Do not broaden the PPU: activation must be fixed per sprite category.
     uint8 id = entry[2];
-    // Explicit ordinary-enemy IDs from the SMW dispatch table. Do not
-    // preload 0x0e (keyhole), 0x19 (message controller), 0x21 (star),
-    // 0x29 (boss), 0x2c (Yoshi egg), 0x34 (boss fireball) or other
-    // scene/collectible/level-geometry mechanisms.
-    bool ordinary_enemy = (id <= 0x0d) ||
+    bool basic_enemy = (id <= 0x0d) ||
         (id >= 0x0f && id <= 0x11) ||
         (id >= 0x13 && id <= 0x16) ||
         id == 0x18 || id == 0x1a ||
@@ -3166,7 +3167,20 @@ static void SmwWidescreenLoadPlacedSprites(void) {
         (id >= 0x3f && id <= 0x44) ||
         id == 0x46 || id == 0x47 ||
         id == 0x4e || id == 0x4f;
-    if (!ordinary_enemy)
+    // Explicit additional normal enemies from SMW's own sprite dispatch
+    // and initialization tables (src/smw_01.c). Preserve native loading
+    // for all moving platforms (including 5F/A3), scrolling controllers,
+    // exits, switches, collectible items and generators/shooters >= C9.
+    bool additional_enemy = (id >= 0x6e && id <= 0x73) || // Dino, Pokey, Super Koopa
+        id == 0x86 ||                                  // Wiggler
+        id == 0x90 ||                                  // Green gas bubble
+        (id >= 0x91 && id <= 0x9b) ||                  // Chucks, lotus, Sumo/Hammer Bros
+        id == 0x9d || id == 0x9f ||                   // Bubble enemy, Banzai Bill
+        id == 0xa5 || id == 0xa6 ||                   // Sparky / Hothead
+        id == 0xaa || id == 0xab || id == 0xae ||     // Fishbone, enemy, Boo
+        id == 0xb0 || id == 0xb4 || id == 0xb6 ||     // Reflecting, grinder
+        id == 0xbd;                                   // Sliding blue Koopa
+    if (!basic_enemy && !(extra_enemies_enabled && additional_enemy))
       continue;
 
     if (g_widescreen_spawn_guard[index])
