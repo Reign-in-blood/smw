@@ -16,3 +16,4 @@ smw_assets.dat
 __pycache__
 /enhanced/
 *.sfc
+*.smc
