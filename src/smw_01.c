@@ -2693,8 +2693,11 @@ void DrawWingTiles_019E37(uint8 k, uint8 r2) {  // 019e37
     // Wing tiles bypass the regular FinishOAMWrite path. Use their
     // complete signed position so wings extend into the 16:9 margins.
     PpuWidescreenSetOamX(g_ppu, v1, (int16)t2);
-    if ((int16)t2 >= -(int)g_ppu->requestedExtra - 16 &&
-        (int16)t2 < 256 + g_ppu->requestedExtra) {
+    // Preserve the exact original 4:3 condition when widescreen is off.
+    if (t2 < 256 ||
+        (g_ppu->requestedExtra &&
+         (int16)t2 >= -(int)g_ppu->requestedExtra - 16 &&
+         (int16)t2 < 256 + g_ppu->requestedExtra)) {
       oam[64].ypos = kDrawWingTiles_YDisp[v2] + r1 - mirror_current_layer1_ypos;
       oam[64].charnum = kDrawWingTiles_Tiles[v2];
       oam[64].flags = kDrawWingTiles_Prop[v2] | sprites_tile_priority;

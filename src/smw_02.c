@@ -3150,14 +3150,22 @@ static void SmwWidescreenLoadPlacedSprites(void) {
     // Keep generators/shooters (>=0xc9), moving platforms (>=0x50),
     // and gameplay controllers/goal objects on the native load frontier.
     uint8 id = entry[2];
-    bool ordinary_enemy = (id <= 0x16) ||
-        (id >= 0x18 && id <= 0x1a) ||
-        (id >= 0x1c && id <= 0x21) ||
-        (id >= 0x26 && id <= 0x2b) ||
-        (id >= 0x30 && id <= 0x3a) ||
-        (id >= 0x3c && id <= 0x3d) ||
-        (id >= 0x46 && id <= 0x48) ||
-        (id >= 0x4b && id <= 0x4f);
+    // Explicit ordinary-enemy IDs from the SMW dispatch table. Do not
+    // preload 0x0e (keyhole), 0x19 (message controller), 0x21 (star),
+    // 0x29 (boss), 0x2c (Yoshi egg), 0x34 (boss fireball) or other
+    // scene/collectible/level-geometry mechanisms.
+    bool ordinary_enemy = (id <= 0x0d) ||
+        (id >= 0x0f && id <= 0x11) ||
+        (id >= 0x13 && id <= 0x16) ||
+        id == 0x18 || id == 0x1a ||
+        (id >= 0x1c && id <= 0x1f) ||
+        (id >= 0x22 && id <= 0x28) ||
+        id == 0x2a || id == 0x2e ||
+        (id >= 0x30 && id <= 0x33) ||
+        (id >= 0x37 && id <= 0x3d) ||
+        (id >= 0x3f && id <= 0x44) ||
+        id == 0x46 || id == 0x47 ||
+        id == 0x4e || id == 0x4f;
     if (!ordinary_enemy)
       continue;
 
