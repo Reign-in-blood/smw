@@ -3157,7 +3157,11 @@ void ParseLevelSpriteList_LoadSpriteLoopStrt(uint8 spr_index, uint8 j, PointU16 
     if (v4 >= (pt.x >> 8)) {
       if (v4 > (pt.x >> 8))
         return;
-      if ((p[j + 1] & 0xF0) == (uint8)pt.x && !sprites_load_status[spr_index]) {
+      if ((p[j + 1] & 0xF0) == (uint8)pt.x && !sprites_load_status[spr_index] &&
+          !(g_config.extended_aspect_ratio && !g_lunar_magic &&
+            spr_index < 64 && g_widescreen_spawn_guard[spr_index])) {
+        // Do not immediately respawn a placement that was activated early
+        // and subsequently killed inside the widened viewport.
         if (LoadOneSprite(p + j, spr_index, pt))
           return;
       }

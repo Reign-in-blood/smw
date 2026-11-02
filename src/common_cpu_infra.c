@@ -1,4 +1,5 @@
 #include "common_cpu_infra.h"
+#include "config.h"
 #include "types.h"
 #include "common_rtl.h"
 #include "snes/cpu.h"
@@ -360,6 +361,15 @@ getout:
 }
 
 void RtlRunFrameCompare() {
+  // Extending enemy activation changes the native gameplay state on purpose.
+  // The original SNES ROM still uses 256px activation boundaries; a dual
+  // execution comparison will therefore fail and discard the C-only spawn.
+  // Keep ROM-vs-C verification untouched in original 4:3 mode.
+  if (g_runmode == RM_BOTH && g_config.extended_aspect_ratio &&
+      g_rtl_game_info->game_id == kGameID_SMW) {
+    g_runmode = RM_MINE;
+    puts("Experimental widescreen: native C gameplay only; ROM/C comparison disabled.");
+  }
   g_use_my_apu_code = (g_runmode != RM_THEIRS);
 
   if (g_runmode == RM_THEIRS) {

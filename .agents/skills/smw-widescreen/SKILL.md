@@ -114,6 +114,14 @@ Première implémentation dans `src/smw_02.c` : pour les niveaux **horizontaux c
 
 **Essais prioritaires :** Yoshi's Island 1/2 : avancer vers un Koopa puis reculer et revenir ; tuer le Koopa et rester à proximité (pas de respawn immédiat) ; sortir de sa zone puis revenir ; faire défiler un ennemi au-delà du bord droit/gauche en 16:9 et vérifier son retour ; comparer `4:3` ; reprendre une sauvegarde ; capturer les ennemis invisibles / graphiques erronés.
 
+## Correctif de l'échec du comparateur (2 novembre 2026)
+
+Retour utilisateur : à partir de la frame `5216`, le jeu a affiché `Memory compare failed`, `VRAM OAM compare failed`, puis `Verify failure!`. **Cause confirmée dans `src/common_cpu_infra.c` :** le mode `RM_BOTH` exécute la simulation de la ROM originale et la recompilation C, puis compare RAM/OAM. Les spawns anticipés C diffèrent délibérément de la ROM, déclenchant le repli sur l'état original : le nouveau chargement ne persistait pas. Le correctif choisit explicitement `RM_MINE` pour le mode 16:9 expérimental uniquement, avec message dans la console. La comparaison en 4:3 reste intacte ; ne pas masquer les véritables erreurs C dans les deux modes.
+
+Un second correctif relie `g_widescreen_spawn_guard` au parseur de sprites d'origine afin d'éviter des réapparitions doubles lors du passage par sa bande de chargement 256px.
+
+**À valider :** compilation TCC, apparition de la ligne de console `Experimental widescreen: native C gameplay only; ROM/C comparison disabled.`, comparaison 4:3, ennemi qui entre depuis la droite, ennemis éliminés, déplacement caméra aller/retour. L'absence de warnings en mode natif ne garantit pas le succès ; vérifier l'écran et la physique.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

@@ -50,3 +50,11 @@ Next: validate compilation and 4:3 parity, fix tile streaming, sprites/spawns, H
 Placed ordinary enemies in stock horizontal levels are now preloaded inside the 398-pixel visible area plus 32 pixels beyond each side; the original loader and 12 normal sprite slots are preserved. Death/erase guards avoid repeated loading while a placement remains within the activation area, and the three normal offscreen-removal banks use the expanded boundary without overriding vertical removal. Drawing culls in Bank01 and Bank23 are also relaxed to the expanded boundary.
 
 **Unverified:** Build TCC/Windows and observe on Yoshi's Island 1/2. Special sprites, generators, shooters, vertical levels, Lunar Magic and Mode 7 are unchanged. Guard state is not stored in savestates. OAM coordinate limitations may still hide objects despite earlier loading. Test a killed Koopa for immediate respawn, and move camera away and back; report exact level and screenshot.
+
+## Hotfix: native gameplay mode for widescreen and duplicate spawn guard
+
+The previous milestone 2 triggered `Memory compare failed`, `VRAM OAM compare failed` and `Verify failure!`. This is because the default project runner compares the original SNES ROM simulation against the reimplemented C simulation every frame. Early enemy spawns intentionally change C RAM and OAM, so the verifier rejects the difference and restores the original result, undoing the visible change.
+
+When `ExtendedAspectRatio = 16:9`, **SMW now runs the reimplemented C simulation alone** (native mode), with a one-time console explanation. The ROM-vs-C verifier is unchanged for the standard `4:3` mode; do not interpret no verifier warnings in 16:9 as proof of gameplay correctness. The original sprite loader now also honors the widened loader's per-placement guard, preventing a native-range load from duplicating an enemy recently killed inside the wide activation zone.
+
+**Retest required:** Build with TCC, confirm exactly one `Experimental widescreen: native C gameplay only; ROM/C comparison disabled.` line at game start, verify early spawning on Yoshi's Island 1/2 and whether extra sprites render in the right/left margins. Compare against `4:3`, where that line must not appear. Check death/respawn and save/load. If sprites remain absent, investigate OAM/graphics coordinates rather than suppressing diagnostics.
