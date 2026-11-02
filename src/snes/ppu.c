@@ -819,8 +819,15 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       // The host-side marker distinguishes an actual X>255 on the right
       // from the SNES negative-X encoding used for objects on the left.
       // Only 16:9 mode writes markers; the 4:3 path remains unmodified.
-      if (ppu->requestedExtra && ppu->widescreenOamX[index >> 1])
-        x = ppu->widescreenOamX[index >> 1];
+      // SMW reuses OAM entries during a frame (e.g. the reserve-box item
+      // at X=120, Y=15 may replace a gameplay tile). A host X hint is
+      // valid only while its low eight bits match the CURRENT OAM tile.
+      // Otherwise an earlier world-space X can move a HUD item whenever
+      // the camera crosses a screen boundary.
+      uint16_t host_x = ppu->widescreenOamX[index >> 1];
+      if (ppu->requestedExtra && host_x &&
+          (uint8_t)host_x == (uint8_t)ppu->oam[index])
+        x = host_x;
       // if in x-range
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already

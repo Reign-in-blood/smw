@@ -3113,19 +3113,10 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       flag_sprites_locked)
     return;
 
+  // Keep the regular native loader for every complex platform, but do not
+  // disable early *enemy* loading for the whole level. The previous global
+  // guard caused every Koopa in a platform level to spawn at the 256px edge.
   const uint8 *list = GetSpriteListPtr();
-  // Sprite 5F draws the rotating brown platform, 9E its ball-and-chain,
-  // and A3 a chained grey platform. Their multi-OAM animations and the
-  // level's reserved sprite slots require native spawn ordering. Disable
-  // experimental early activation for an entire such level, rather than
-  // starving a platform of slots while the camera approaches it.
-  for (int i = 0; i < 64; i++) {
-    const uint8 *entry = list + 1 + i * 3;
-    if (entry[0] == 0xff)
-      break;
-    if (entry[2] == 0x5f || entry[2] == 0x9e || entry[2] == 0xa3)
-      return;
-  }
 
   // Original camera is 256 pixels wide. Extra columns are visible on each
   // side; start normal enemies 32 pixels before they enter the 398px view.

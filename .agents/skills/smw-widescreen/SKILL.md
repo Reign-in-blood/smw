@@ -150,6 +150,16 @@ Le test utilisateur du commit `1694bb8` confirme que les monstres apparaissent t
 
 **Non vérifié en jeu** : Windows TCC reste à compiler/tester. La disparition des plateformes peut avoir d'autres causes (OAM de sprites spéciaux, état C natif). Régression du bonus : cercle de blocs trop haut et autres objets manquants **encore ouverts** malgré l'essai BG3. Surtout ne pas déclarer ces problèmes résolus avant reproduction.
 
+## Correctif HUD et rétablissement des ennemis dans les niveaux à plateformes (2 novembre 2026)
+
+**Rapport utilisateur sur `0e5cb9f` :** eau BG3 étendue = OK, plateformes tournantes = de nouveau visibles mais avec bugs, **ennemis = retour à l'apparition au bord 256 px**, et **item de réserve HUD (case en haut au centre) se décale hors de la case puis se recentre au fil du scrolling / lors de gros changements de caméra**.
+
+**Erreur trouvée dans le correctif précédent :** `SmwWidescreenLoadPlacedSprites` désactivait TOUS les spawns anticipés dès qu'un `0x5F`, `0x9E` ou `0xA3` était présent dans la liste du niveau, y compris les ennemis de base. Ce garde global a été supprimé. La liste blanche des seuls ennemis classiques, les 4 slots laissés libres, et le chargement natif des mécanismes spéciaux restent en place. Cela préserve le progrès des plateformes tout en réactivant la préapparition des Koopas dans ces niveaux. **À revalider** : certains types d'ennemis toujours hors liste blanche spawneront en 1:1.
+
+**Cause probable du bug HUD :** la table `Ppu::widescreenOamX` reçoit des corrections hôte attachées à l'index OAM ; la SNES réutilise des slots pour des objets graphiques différents (dont l'item de réserve à X=120, Y=15 dans `UpdateStatusBarCounters_DrawItemBoxItem`). Une coordonnée d'un ancien sprite peut alors déplacer un nouveau sprite fixe. Le PPU ne consomme plus un indice hôte si ses 8 bits faibles ne correspondent pas à ceux de **l'OAM courant**. Cela ne modifie pas l'OAM original ni les coordonnées natives, et conserve le décodage étendu de Zelda3.
+
+**Tests Windows à réaliser (aucune compilation par l'assistant) :** niveau avec plateforme tournante + Koopa, eau BG3, item réserve pendant plusieurs passages de frontières de caméra à gauche/droite et sauvegarde/chargement. Noter défauts résiduels des plateformes et de l'eau ; bug du bonus (roue de blocs trop haute) toujours ouvert.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

@@ -84,3 +84,13 @@ SMW now wraps at `x >= 256 + ppu->extraRightCur`. With the experimental 71 extra
 BG3 water root cause: `PpuWindows_Clear/Calc` systematically excluded BG3 from expanded margins, because SMW uses BG3 for its status bar. In this experiment BG3 is extended **only below the first 32 scanlines**, with top 32 still native-width. Tilemap streaming of BG3 is unchanged; side effects remain possible. Rotating platforms: the experimental loader indiscriminately pre-spawned IDs below `0xc9`, including platform IDs `0x5f`, `0x9e`, `0xa3`, potentially breaking slots/OAM ordering. Early spawning now only handles low-risk basic enemy IDs `0x00..​0x0c`, `0x0f..0x11`. Entire levels listing rotating/chained platforms use stock spawn order; the early loader keeps at least four of twelve normal slots free. Rendering sprite/tile budgets scale up only in 16:9 (50 objects, 54 slivers per scanline vs 32/34 stock).
 
 **Re-test before claiming success**: ordinary Koopa stage (new 16:9 mobs still visible), the rotating-platform stage (platforms exist and carry Mario), watery bonus stage (water extends both edges), and 4:3 parity. Other bonus issues (high unreachable ring and missing geometry) remain open, and special platform behavior needs extra QA.
+
+## Milestone 6 — HUD reserve item OAM stability and basic enemy activation
+
+User test of milestone 5: **BG3 water works**, rotating platforms are visible again but still glitchy, enemy activation regressed to the native 256px boundary, and the status-bar reserve item jumps horizontally when the camera crosses coarse scroll boundaries.
+
+The previous precaution disabled the *entire* widened placement parser when a complex rotating/chained platform existed anywhere in that stage. Removed that global veto. The parser retains its restricted basic-enemy allowlist and reserves four native sprite slots; platforms and other complex sprites still use the original loader and timing.
+
+The OAM renderer also has a host-only right-side hint array. As native SMW reuses OAM slots for different drawings, a hint from a game sprite can later be accidentally applied to a HUD sprite, despite that item's actual screen X being fixed (120px). Hints are now used only if their low 8 bits match the current native OAM tile X, invalidating mismatched/stale positions. This is an evidence-based probable fix, **not yet gameplay validated**.
+
+Windows acceptance: compile TCC; check an ordinary enemy in the right 16:9 margin inside a level with rotating platforms, platform rendering and ride/collision, BG3 water, and reserve box item during multiple camera scrolling boundaries. Item should remain anchored at X=120 in the native 256px center. Further bonus room regressions remain open.
