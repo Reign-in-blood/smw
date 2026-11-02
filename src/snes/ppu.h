@@ -148,6 +148,7 @@ struct Ppu {
     uint8_t y, tile, flags, size, slot;
   } widescreenDraws[512];
   uint16_t widescreenDrawCount;
+  bool widescreenFrameDrewPixels;
   uint8_t lastMosaicModulo;
   uint8_t lastBrightnessMult;
   bool lineHasSprites;
@@ -246,6 +247,7 @@ void PpuBeginDrawing(Ppu *ppu, uint8_t *pixels, size_t pitch, uint32_t render_fl
 void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side);
 void PpuWidescreenClearOamX(Ppu *ppu);
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x);
+void PpuWidescreenBeginActor(Ppu *ppu);
 // old/now OAM point at the 64 normal-sprite tiles (0x300..0x3ff),
 // old/now size at 0x460..0x49f. Capture immediately after each actor.
 void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,

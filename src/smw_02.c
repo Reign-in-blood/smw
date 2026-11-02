@@ -5693,6 +5693,10 @@ GetDrawInfoRes GetDrawInfo_Bank23_ReturnsTwice(uint8 k) {  // 02d378
     } while ((--v3 & 0x80) == 0);
     uint8 r0 = spr_xpos_lo[k] - mirror_current_layer1_xpos;
     uint8 r1 = spr_ypos_lo[k] - mirror_current_layer1_ypos;
+    // Bind a successful normal sprite draw-info lookup to the OAM tile
+    // it belongs to; this also catches unchanged images in the host view.
+    PpuWidescreenSetOamX(g_ppu, spr_oamindex[k],
+        (int16)(GetSprXPos(k) - mirror_current_layer1_xpos));
     return (GetDrawInfoRes) { .idx = spr_oamindex[k], .x = r0, .y = r1 };
   }
 }

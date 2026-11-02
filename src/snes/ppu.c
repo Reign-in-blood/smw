@@ -77,6 +77,13 @@ void PpuWidescreenClearOamX(Ppu *ppu) {
   ppu->widescreenDrawCount = 0;
 }
 
+// Reset provenance for each native actor; captured images are already
+// retained separately and must not depend on the next actor's OAM slots.
+void PpuWidescreenBeginActor(Ppu *ppu) {
+  if (ppu->requestedExtra)
+    memset(ppu->widescreenOamX + 64, 0, 64 * sizeof(uint16_t));
+}
+
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x) {
   // All callers write SMW's upper OAM buffer (oam_buf[64] at offset 0x300).
   // The caller's byte offset is 0..255 *within that upper half*.
@@ -99,16 +106,22 @@ void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,
     return;
   for (int i = 0; i < 64; i++) {
     const uint8_t *tile = now_oam + i * 4;
-    if (tile[1] == 0xf0 ||
-        (!memcmp(tile, old_oam + i * 4, 4) && now_size[i] == old_size[i]))
+    if (tile[1] == 0xf0)
       continue;
-    // The original OAM X is only 8 bits. Recover the actual per-tile
-    // position relative to this actor, using the signed 8-bit displacement.
-    int x = origin_x + (int8_t)(tile[0] - (uint8_t)origin_x);
+    // An actor may redraw precisely the same OAM bytes as last frame.
+    // Memcmp alone made standing enemies and anchored platforms vanish,
+    // even though GetDrawInfo/FinishOAMWrite had actually emitted a tile.
+    const bool changed = memcmp(tile, old_oam + i * 4, 4) != 0 ||
+                         now_size[i] != old_size[i];
     uint16_t known_x = ppu->widescreenOamX[64 + i];
-    if (known_x && (uint8_t)known_x == tile[0])
-      x = (int16_t)known_x;
-    else if (complex_sprite)
+    const bool authored_here = known_x && (uint8_t)known_x == tile[0];
+    if (!changed && !authored_here)
+      continue;
+    // Recover the signed position from this actor's source coordinates.
+    int x = authored_here
+          ? (int16_t)known_x
+          : origin_x + (int8_t)(tile[0] - (uint8_t)origin_x);
+    if (complex_sprite && !authored_here)
       continue; // Complex tiles need exact per-tile provenance.
     if (x < 256 || x >= 256 + ppu->requestedExtra)
       continue;
@@ -155,6 +168,7 @@ void ppu_runLine(Ppu* ppu, int line) {
   // below the status bar must also cover the expanded viewport.
   ppu->widescreenBg3 = side && line > 32;
   if(line == 0) {
+    ppu->widescreenFrameDrewPixels = false;
     if (PPU_mosaicSize(ppu) != ppu->lastMosaicModulo) {
       int mod = PPU_mosaicSize(ppu);
       ppu->lastMosaicModulo = mod;
@@ -203,11 +217,22 @@ void ppu_runLine(Ppu* ppu, int line) {
     // event-only "WS spawn" trace. The count shows that the actual
     // per-actor right-margin captures have reached the renderer.
     if (line == 224 && ppu->requestedExtra) {
-      static unsigned trace_frame;
+      static unsigned trace_frame, frames_captured, frames_drawn, peak_parts;
       const char *trace = getenv("SMW_WS_TRACE");
-      if (trace && trace[0] == '1' && (++trace_frame % 120) == 0)
-        printf("WS render frames=%u right_oam_pieces=%u\n",
-            trace_frame, (unsigned)ppu->widescreenDrawCount);
+      if (trace && trace[0] == '1') {
+        ++trace_frame;
+        if (ppu->widescreenDrawCount)
+          ++frames_captured;
+        if (ppu->widescreenFrameDrewPixels)
+          ++frames_drawn;
+        if (ppu->widescreenDrawCount > peak_parts)
+          peak_parts = ppu->widescreenDrawCount;
+        if (trace_frame % 120 == 0) {
+          printf("WS render frames=%u captured_frames=%u drawn_frames=%u peak_pieces=%u\n",
+              trace_frame, frames_captured, frames_drawn, peak_parts);
+          frames_captured = frames_drawn = peak_parts = 0;
+        }
+      }
     }
   }
 }
@@ -886,6 +911,7 @@ static bool ppu_drawCapturedWidescreenSprites(Ppu *ppu, int line) {
         if (pixel && !(dst[px] & 0xff)) {
           dst[px] = z + pixel;
           rendered = true;
+          ppu->widescreenFrameDrewPixels = true;
         }
       }
     }

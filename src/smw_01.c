@@ -784,6 +784,7 @@ void ProcessNormalSprites() {  // 01808c
   for (int8 i = 11; i >= 0; --i) {
     spr_current_slotid = i;
     ProcessNormalSprites_GetNormalSpriteOAMIndexAndDecrementTimers(i);
+    PpuWidescreenBeginActor(g_ppu);
     // SMW reuses native OAM tile slots, notably on large moving sprites.
     // Save the image before this actor runs; capture the changed tiles
     // immediately afterwards, before the next actor overwrites them.
@@ -3085,6 +3086,10 @@ GetDrawInfoRes GetDrawInfo_Bank01_ReturnsTwice(uint8 k) {  // 01a365
       if (ty >= 256)
         spr_yoffscreen_flag[k] |= kGetDrawInfo_DATA_01A363[v2];
     } while ((--v2 & 0x80) == 0);
+    // GetDrawInfo reached the real emitter for this actor, even if its
+    // OAM bytes happen to be identical to the preceding frame.
+    PpuWidescreenSetOamX(g_ppu, spr_oamindex[k],
+        (int16)(GetSprXPos(k) - mirror_current_layer1_xpos));
     return (GetDrawInfoRes) { .idx = spr_oamindex[k], .x = r0, .y = r1 };
   }
 }

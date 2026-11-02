@@ -136,3 +136,11 @@ A post-commit static review found two guaranteed issues: (1) `PpuWidescreenSetOa
 ### Tracing clarification
 
 The user-provided `WS spawn` record is a **successful event-driven spawn**, not a frame-by-frame rendering log; seeing only one line is expected while no further placement records activate. The same `SMW_WS_TRACE=1` toggle now additionally prints `WS render frames=N right_oam_pieces=M` every 120 rendered frames (2 seconds at 60fps), where `M` is the number of changed, signed-X normal actor OAM pieces captured for the current frame in the right margin. If `M=0` while an expected enemy is visually in the margin, the missing stage is ownership/capture/drawing, not necessarily the placement loader. The PPU writes no extra diagnostics when disabled.
+
+### Milestone 9 — unchanged OAM still belongs to a drawn actor
+
+The user tested the previous capture implementation: basic enemies are definitively spawned in advance (e.g. `id=05 world=432 camera=73` => screen X=359, 32 pixels beyond the 16:9 right edge), but ordinary enemies remain absent from the margins. `WS render` was sampled only once every 120 frames and sometimes reports captured pieces, so the 0-count samples do not imply zero captures over the preceding 119 frames.
+
+Code diagnosis: capture skipped every OAM tile unchanged between actor-entry and actor-exit, even if a real sprite redraws the identical OAM image. This affects standing actors and some platforms. It also reused provenance across actors. Fixed by resetting provenance at each normal actor boundary, marking successful `GetDrawInfo` slots with a signed camera-relative X, and allowing unchanged OAM snapshots when that same actor authored a matching host X hint. Complex multi-piece platforms still require individually authored hints.
+
+`SMW_WS_TRACE=1` now aggregates every **120** frames: `captured_frames` counts frames with any captured right-margin pieces, `drawn_frames` counts frames where captured sprites wrote at least one nontransparent pixel into the PPU OBJ buffer, `peak_pieces` reports the per-frame maximum. These counters isolate capture, raster, and compositing failures rather than showing a potentially misleading instantaneous zero. No Windows compilation/run was done; compare Koopa stages, platforms, BG3 water, HUD, and native 4:3.
