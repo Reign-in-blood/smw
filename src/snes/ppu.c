@@ -108,6 +108,9 @@ void ppu_runLine(Ppu* ppu, int line) {
   uint8_t side = g_new_ppu && PPU_mode(ppu) == 1 && PPU_mosaicSize(ppu) == 1
     ? ppu->requestedExtra : 0;
   ppu->extraLeftCur = ppu->extraRightCur = side;
+  // The SMW HUD uses BG3 at the top, but layer-3 water/backgrounds
+  // below the status bar must also cover the expanded viewport.
+  ppu->widescreenBg3 = side && line > 32;
   if(line == 0) {
     if (PPU_mosaicSize(ppu) != ppu->lastMosaicModulo) {
       int mod = PPU_mosaicSize(ppu);
@@ -163,8 +166,9 @@ typedef struct PpuWindows {
 } PpuWindows;
 
 static void PpuWindows_Clear(PpuWindows *win, Ppu *ppu, uint layer) {
-  win->edges[0] = -(layer != 2 ? ppu->extraLeftCur : 0);
-  win->edges[1] = 256 + (layer != 2 ? ppu->extraRightCur : 0);
+  bool extend = layer != 2 || ppu->widescreenBg3;
+  win->edges[0] = -(extend ? ppu->extraLeftCur : 0);
+  win->edges[1] = 256 + (extend ? ppu->extraRightCur : 0);
   win->nr = 1;
   win->bits = 0;
 }
@@ -175,8 +179,9 @@ static void PpuWindows_Calc(PpuWindows *win, Ppu *ppu, uint layer) {
   // Algorithm from Snes9x
   uint32 winflags = GET_WINDOW_FLAGS(ppu, layer);
   uint nr = 1;
-  int window_right = 256 + (layer != 2 ? ppu->extraRightCur : 0);
-  win->edges[0] = - (layer != 2 ? ppu->extraLeftCur : 0);
+  bool extend = layer != 2 || ppu->widescreenBg3;
+  int window_right = 256 + (extend ? ppu->extraRightCur : 0);
+  win->edges[0] = -(extend ? ppu->extraLeftCur : 0);
   win->edges[1] = window_right;
   uint i, j;
   int t;
@@ -793,6 +798,11 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
   uint8_t index = PPU_objPriority(ppu) ? (ppu->oamaddl & 0xfe) : 0;
   int spritesFound = 0;
   int tilesFound = 0;
+  // Extending the visible scene without raising the per-line sprite budget
+  // can hide multi-tile platforms before their turn in OAM. Keep stock SNES
+  // limits in 4:3 and grant proportional headroom only to the wide PPU.
+  int spriteLimit = ppu->extraRightCur ? 50 : 32;
+  int tileLimit = ppu->extraRightCur ? 54 : 34;
   for(int i = 0; i < 128; i++) {
     uint8_t y = ppu->oam[index] >> 8;
     // check if the sprite is on this line and get the sprite size
@@ -815,7 +825,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already
         spritesFound++;
-        if(spritesFound > 32) {
+        if(spritesFound > spriteLimit) {
           ppu->rangeOver = true;
           break;
         }
@@ -837,7 +847,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
           if(col + x > -8 - ppu->extraLeftCur && col + x < 256 + ppu->extraRightCur) {
             // break if we found 34 8*1 slivers already
             tilesFound++;
-            if(tilesFound > 34) {
+            if(tilesFound > tileLimit) {
               ppu->timeOver = true;
               break;
             }
@@ -862,7 +872,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
 
           }
         }
-        if(tilesFound > 34) break; // break out of sprite-loop if max tiles found
+        if(tilesFound > tileLimit) break; // break out of sprite-loop if max tiles found
       }
     }
     index += 2;

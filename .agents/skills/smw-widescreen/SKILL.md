@@ -140,6 +140,16 @@ Le test utilisateur du commit `1694bb8` confirme que les monstres apparaissent t
 
 **Autre référence Zelda3 à maintenir** : `src/sprite.c::Sprite_ActivateWhenProximal` et `Sprite_PrepOamCoordOrDoubleRet` élargissent séparément activation, visibilité et conservation avec `kFeatures0_ExtendScreen64`. Le PPU seul ne suffit pas. Les doublons et le niveau bonus à la roue de blocs restent des régressions ouvertes.
 
+## Régressions graphiques graves — BG3 et plateformes (retour utilisateur, 2 novembre 2026)
+
+**Confirmé par test utilisateur du commit `0ccdc1f` :** les mobs ordinaires semblent enfin s'afficher dans le 16:9. **Mais** des niveaux deviennent injouables : eau d'un sous-niveau bonus limitée aux 256 px d'origine en bas d'écran, objets manquants/déplacés ; autre niveau normal avec plateformes mobiles tournant autour d'un axe devenues complètement invisibles alors qu'elles fonctionnaient quelques commits auparavant.
+
+**Constats dans le code :** `src/snes/ppu.c::PpuWindows_Clear/Calc` excluait délibérément la couche BG3 (`layer == 2`) de l'extension sur **toutes** les lignes. Cela protège la barre d'état en haut de l'écran, mais coupe l'eau BG3 dans le bas. Autre problème probable : le préchargeur ajoutait tous les types de sprites `id < 0xC9`, y compris les plateformes `0x5f`/ `0xa3` et boules/chaînes `0x9e`, qui dépendent de slots OAM et de l'ordre d'apparition natif.
+
+**Correctif expérimental :** BG3 peut maintenant couvrir les marges **seulement sous les 32 premières lignes** du HUD ; le rendu doit être revalidé sur les niveaux aquatiques et les sous-niveaux avec eau, car le tilemap BG3 n'a pas été étendu/chargé spécifiquement. Le préchargeur est limité aux Koopas/Goombas/Buzzy ordinaires (`id<=0x0c`, `0x0f`, `0x10`, `0x11`), conserve quatre slots de sprites libres, et se désactive dans les niveaux contenant une plateforme/chaîne complexe (`0x5f`, `0x9e`, `0xa3`). Le PPU augmente le budget de sprites/tuiles sur une ligne en 16:9 seulement, pour ne pas masquer des plateformes multi-tuiles juste parce que le champ est plus large.
+
+**Non vérifié en jeu** : Windows TCC reste à compiler/tester. La disparition des plateformes peut avoir d'autres causes (OAM de sprites spéciaux, état C natif). Régression du bonus : cercle de blocs trop haut et autres objets manquants **encore ouverts** malgré l'essai BG3. Surtout ne pas déclarer ces problèmes résolus avant reproduction.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

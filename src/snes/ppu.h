@@ -134,6 +134,9 @@ struct Ppu {
 
   uint8_t extraLeftCur, extraRightCur, extraLeftRight;
   uint8_t requestedExtra;  // host-only, excluded from savestate ranges
+  // BG3 hosts the original SMW status bar (top 32 lines) and sometimes
+  // water/cloud layers below it. Extend BG3 only outside the HUD region.
+  bool widescreenBg3;
   // Screen-space X for OAM tiles beyond the SNES 256px right edge.
   // Zero means use the original OAM 9-bit signed coordinate.
   uint16_t widescreenOamX[128];

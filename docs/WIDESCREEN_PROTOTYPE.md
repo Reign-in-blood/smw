@@ -76,3 +76,11 @@ The user reports that ordinary enemies still pop in at the native 256px edge. `s
 SMW now wraps at `x >= 256 + ppu->extraRightCur`. With the experimental 71 extra pixels this permits X=256..326; with 4:3 it wraps at the original 256. The previous host-only OAM-X markers remain in place. This is a targeted rendering correction, not a fix for enemy spawn semantics, every specialty graphics routine, duplicate actor lifecycle, or the pipe bonus room.
 
 **Unverified Windows test**: rebuild with TCC, check normal Koopas at X=256..326 while entering from right, then move camera back and forth; compare to 4:3. If sprites still only appear at the old border, log the placement-loader and actual high OAM X bit for a specific enemy.
+
+## Milestone 5 — BG3 water and rotating-platform safeguards (Windows tests pending)
+
+**New user-confirmed regressions after OAM wrap fix:** enemies now largely appear in 16:9, but a bonus pipe area's bottom water renders at only native 256px, with misplaced/missing level objects. Rotating mobile platforms in a normal level are now invisible, breaking progression; they previously worked in an earlier build.
+
+BG3 water root cause: `PpuWindows_Clear/Calc` systematically excluded BG3 from expanded margins, because SMW uses BG3 for its status bar. In this experiment BG3 is extended **only below the first 32 scanlines**, with top 32 still native-width. Tilemap streaming of BG3 is unchanged; side effects remain possible. Rotating platforms: the experimental loader indiscriminately pre-spawned IDs below `0xc9`, including platform IDs `0x5f`, `0x9e`, `0xa3`, potentially breaking slots/OAM ordering. Early spawning now only handles low-risk basic enemy IDs `0x00..​0x0c`, `0x0f..0x11`. Entire levels listing rotating/chained platforms use stock spawn order; the early loader keeps at least four of twelve normal slots free. Rendering sprite/tile budgets scale up only in 16:9 (50 objects, 54 slivers per scanline vs 32/34 stock).
+
+**Re-test before claiming success**: ordinary Koopa stage (new 16:9 mobs still visible), the rotating-platform stage (platforms exist and carry Mario), watery bonus stage (water extends both edges), and 4:3 parity. Other bonus issues (high unreachable ring and missing geometry) remain open, and special platform behavior needs extra QA.

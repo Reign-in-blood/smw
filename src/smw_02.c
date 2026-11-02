@@ -3113,13 +3113,26 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       flag_sprites_locked)
     return;
 
+  const uint8 *list = GetSpriteListPtr();
+  // Sprite 5F draws the rotating brown platform, 9E its ball-and-chain,
+  // and A3 a chained grey platform. Their multi-OAM animations and the
+  // level's reserved sprite slots require native spawn ordering. Disable
+  // experimental early activation for an entire such level, rather than
+  // starving a platform of slots while the camera approaches it.
+  for (int i = 0; i < 64; i++) {
+    const uint8 *entry = list + 1 + i * 3;
+    if (entry[0] == 0xff)
+      break;
+    if (entry[2] == 0x5f || entry[2] == 0x9e || entry[2] == 0xa3)
+      return;
+  }
+
   // Original camera is 256 pixels wide. Extra columns are visible on each
   // side; start normal enemies 32 pixels before they enter the 398px view.
   const int side = g_config.extended_aspect_ratio + 32;
   const int left = IntMax(0, (int)mirror_current_layer1_xpos - side);
   const int right = (int)mirror_current_layer1_xpos + 256 + side;
 
-  const uint8 *list = GetSpriteListPtr();
   // Standard SMW levels have at most 64 source-list sprite slots, matching
   // the load status initialized in InitializeAllSpritesOnLevelLoad.
   for (uint8 index = 0; index < 64; index++) {
@@ -3137,9 +3150,11 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       continue;
     }
 
-    // Special sprite generators, shooters and multi-spawn objects need their
-    // own lifecycle handling; leave them to the original parser for now.
-    if (entry[2] >= 0xc9)
+    // Only pre-activate standard small enemies (Koopas, Goombas,
+    // Buzzy Beetles). Platforms, rotating objects, goals, shooters,
+    // generators and other special sprites retain native spawn behavior.
+    if (entry[2] > 0x0c && entry[2] != 0x0f &&
+        entry[2] != 0x10 && entry[2] != 0x11)
       continue;
 
     if (g_widescreen_spawn_guard[index])
@@ -3149,6 +3164,14 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       g_widescreen_spawn_guard[index] = 1;
       continue;
     }
+
+    // Hold back four of the 12 native sprite slots for regular level
+    // mechanisms that can appear later in the original camera window.
+    int freeSlots = 0;
+    for (int slot = 0; slot < 12; slot++)
+      freeSlots += (spr_current_status[slot] == 0);
+    if (freeSlots <= 4)
+      break;
 
     PointU16 pt = {.x = world_x, .y = 0};
     LoadOneSprite(entry, index, pt);
