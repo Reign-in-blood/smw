@@ -78,8 +78,13 @@ void PpuWidescreenClearOamX(Ppu *ppu) {
 }
 
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x) {
+  // All callers write SMW's upper OAM buffer (oam_buf[64] at offset 0x300).
+  // The caller's byte offset is 0..255 *within that upper half*.
+  // Previous revisions stored the hint at 0..63 (lower OAM/HUD slots),
+  // but the actual sprite is in slot 64..127. This made the hints invisible
+  // to the real sprites and sometimes contaminated unrelated HUD entries.
   if (ppu->requestedExtra && x >= 256 && x < 256 + ppu->requestedExtra)
-    ppu->widescreenOamX[oam_byte_offset >> 2] = (uint16_t)x;
+    ppu->widescreenOamX[64 + (oam_byte_offset >> 2)] = (uint16_t)x;
 }
 
 // Inspired by the per-actor completed-OAM ownership in SuperMarioWorldRecomp.
@@ -971,7 +976,11 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
     }
     index += 2;
   }
-  return tilesFound != 0 || ppu_drawCapturedWidescreenSprites(ppu, line);
+  // The capture renderer must run even if the native OAM pass already
+  // drew an object. Short-circuiting || skipped *all* wide captures on
+  // typical game lines containing an ordinary visible sprite.
+  bool captured = ppu_drawCapturedWidescreenSprites(ppu, line);
+  return tilesFound != 0 || captured;
 }
 
 static uint16_t ppu_getVramRemap(Ppu* ppu) {

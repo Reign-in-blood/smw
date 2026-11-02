@@ -210,6 +210,10 @@ Nouvelle stratégie d'après `mstan/SuperMarioWorldRecomp` : ne plus déplacer l
 
 Le `SMW_WS_TRACE` existant ne trace que les tentatives réussies/échouées du préchargeur, pas chaque image de sprite ; un unique log est donc normal. Évaluer les captures avec un test Windows ; ne pas affirmer corrigé avant validation.
 
+## Jalon 8 : revue statique et deux bugs certains corrigés
+
+**Priorité haute pour les régressions précédentes :** `PpuWidescreenSetOamX` enregistrait l'index `byte_offset >> 2` dans `widescreenOamX[0..63]`, mais tous les appelants ordinaires utilisent les **slots OAM supérieurs 64..127** via `oam_buf[64]`. L'index correct est `64 + (byte_offset >> 2)`. Ancien comportement : sprites sans indication de X à droite ; fuites potentielles vers les éléments du HUD gérés dans la moitié basse. Deuxième bug certain : `return tilesFound != 0 || ppu_drawCapturedWidescreenSprites(...)` ne lançait pas le moteur de capture si un sprite natif était déjà présent sur la ligne (court-circuit de `||`). Corrigé en appel indépendant suivi de la combinaison des booléens. Exiger une recompilation et test Windows avant de considérer la capture prête.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.
