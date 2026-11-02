@@ -3,6 +3,9 @@
 #include "smw_rtl.h"
 #include "variables.h"
 #include "config.h"
+#include "snes/ppu.h"
+#include <stdio.h>
+#include <stdlib.h>
 
 void (*kProcessMinorExtendedSprites_MinorExtendedSpritesPtrs[12])(uint8 k) = {
     &ProcessMinorExtendedSprites_Return, &MExtSpr01_BrickPiece,  &MExtSpr02_SmallStar,   &MExtSpr03_EggShell,
@@ -3141,11 +3144,21 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       continue;
     }
 
-    // Only pre-activate standard small enemies (Koopas, Goombas,
-    // Buzzy Beetles). Platforms, rotating objects, goals, shooters,
-    // generators and other special sprites retain native spawn behavior.
-    if (entry[2] > 0x0c && entry[2] != 0x0f &&
-        entry[2] != 0x10 && entry[2] != 0x11)
+    // Early-load ordinary enemies, not mechanisms or progression records.
+    // The previous 0x00..0x11-only allowlist excluded common enemies and
+    // caused their visible activation to regress to the original 256px edge.
+    // Keep generators/shooters (>=0xc9), moving platforms (>=0x50),
+    // and gameplay controllers/goal objects on the native load frontier.
+    uint8 id = entry[2];
+    bool ordinary_enemy = (id <= 0x16) ||
+        (id >= 0x18 && id <= 0x1a) ||
+        (id >= 0x1c && id <= 0x21) ||
+        (id >= 0x26 && id <= 0x2b) ||
+        (id >= 0x30 && id <= 0x3a) ||
+        (id >= 0x3c && id <= 0x3d) ||
+        (id >= 0x46 && id <= 0x48) ||
+        (id >= 0x4b && id <= 0x4f);
+    if (!ordinary_enemy)
       continue;
 
     if (g_widescreen_spawn_guard[index])
@@ -3165,11 +3178,18 @@ static void SmwWidescreenLoadPlacedSprites(void) {
       break;
 
     PointU16 pt = {.x = world_x, .y = 0};
-    LoadOneSprite(entry, index, pt);
+    bool allocation_failed = LoadOneSprite(entry, index, pt);
     // On a full sprite slot, LoadOneSprite clears the status; retry on a
     // subsequent frame rather than permanently losing the enemy.
     if (sprites_load_status[index])
       g_widescreen_spawn_guard[index] = 1;
+    // Opt-in trace identifies whether a missing right-margin enemy was
+    // actually loaded or was blocked before it ever reached graphics/OAM.
+    if (getenv("SMW_WS_TRACE") && getenv("SMW_WS_TRACE")[0] == '1')
+      printf("WS spawn frame=%u record=%u id=%02X world=%d camera=%u status=%u blocked=%u\n",
+          (unsigned)counter_global_frames, (unsigned)index, (unsigned)id,
+          world_x, (unsigned)mirror_current_layer1_xpos,
+          (unsigned)sprites_load_status[index], (unsigned)allocation_failed);
   }
 }
 
@@ -5881,6 +5901,9 @@ PointU8 Spr0A3_GreyChainedPlatform_02D813(uint8 k) {  // 02d813
   for (uint8 i = 3; (i & 0x80) == 0; --i) {
     OamEnt *oam = get_OamEnt(oam_buf, drt.idx);
     oam[64].xpos = kSpr0A3_GreyChainedPlatform_DATA_02D807[i] + drt.x;
+    PpuWidescreenSetOamX(g_ppu, drt.idx,
+        (int16)(GetSprXPos(k) - mirror_current_layer1_xpos) +
+        (int8)kSpr0A3_GreyChainedPlatform_DATA_02D807[i]);
     oam[64].ypos = kSpr0A3_GreyChainedPlatform_DATA_02D80B[i] + drt.y;
     oam[64].charnum = kSpr0A3_GreyChainedPlatform_DoNothing6Times[i];
     oam[64].flags = kSpr0A3_GreyChainedPlatform_DATA_02D80F[i];
@@ -5897,6 +5920,9 @@ PointU8 Spr0A3_GreyChainedPlatform_02D848(uint8 k) {  // 02d848
   for (uint8 i = 3; (i & 0x80) == 0; --i) {
     OamEnt *oam = get_OamEnt(oam_buf, drt.idx);
     oam[64].xpos = kSpr0A3_GreyChainedPlatform_DATA_02D840[i] + drt.x;
+    PpuWidescreenSetOamX(g_ppu, drt.idx,
+        (int16)(GetSprXPos(k) - mirror_current_layer1_xpos) +
+        (int8)kSpr0A3_GreyChainedPlatform_DATA_02D840[i]);
     oam[64].ypos = drt.y;
     oam[64].charnum = kSpr0A3_GreyChainedPlatform_WoodPlatformTiles[i];
     oam[64].flags = 51;

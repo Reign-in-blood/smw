@@ -2690,7 +2690,11 @@ void DrawWingTiles_019E37(uint8 k, uint8 r2) {  // 019e37
     OamEnt *oam = get_OamEnt(oam_buf, v1);
     uint16 t2 = t - mirror_current_layer1_xpos;
     oam[64].xpos = t2;
-    if (t2 < 256) {
+    // Wing tiles bypass the regular FinishOAMWrite path. Use their
+    // complete signed position so wings extend into the 16:9 margins.
+    PpuWidescreenSetOamX(g_ppu, v1, (int16)t2);
+    if ((int16)t2 >= -(int)g_ppu->requestedExtra - 16 &&
+        (int16)t2 < 256 + g_ppu->requestedExtra) {
       oam[64].ypos = kDrawWingTiles_YDisp[v2] + r1 - mirror_current_layer1_ypos;
       oam[64].charnum = kDrawWingTiles_Tiles[v2];
       oam[64].flags = kDrawWingTiles_Prop[v2] | sprites_tile_priority;
@@ -5737,6 +5741,10 @@ void Spr05F_BrownChainedPlatform(uint8 k) {  // 01c773
     OamEnt *v18 = get_OamEnt(oam_buf, v15);
     int8 v19 = v18[64].xpos - xpos;
     uint16 r4w = r2w + (int8)v19;
+    // Each tile of this ten-piece chained platform has its own actual
+    // signed world X. A raw 9-bit SNES OAM X is ambiguous outside 256px.
+    PpuWidescreenSetOamX(g_ppu, v15,
+        (int16)(r4w - mirror_current_layer1_xpos));
     if (FinishOAMWrite_01B844(r4w) & 1)
       sprites_oamtile_size_buffer[(v15 >> 2) + 64] = 3;
     int8 v21 = v18[64].ypos - ypos;
