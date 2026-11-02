@@ -17,3 +17,4 @@ __pycache__
 /enhanced/
 *.sfc
 *.smc
+/smw.user.ini

@@ -24,9 +24,11 @@ typedef struct BgLayer {
   bool xxmosaicEnabled;
 } BgLayer;
 
+// 400 pixels of storage: 256 native + up to 72 pixels at each side.
+// 16:9 uses 71 of those 72 pixels, for a visible 398x224 image.
 enum {
-  kPpuXPixels = 256,
-  kPpuExtraLeftRight = 0,
+  kPpuExtraLeftRight = 72,
+  kPpuXPixels = 256 + kPpuExtraLeftRight * 2,
 };
 
 typedef uint16_t PpuZbufType;
@@ -131,6 +133,7 @@ struct Ppu {
   // times 2 for even and odd frame
 
   uint8_t extraLeftCur, extraRightCur, extraLeftRight;
+  uint8_t requestedExtra;  // host-only, excluded from savestate ranges
   uint8_t lastMosaicModulo;
   uint8_t lastBrightnessMult;
   bool lineHasSprites;
@@ -226,6 +229,7 @@ uint8_t ppu_read(Ppu* ppu, uint8_t adr);
 void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val);
 void ppu_saveload(Ppu *ppu, SaveLoadInfo *sli);
 void PpuBeginDrawing(Ppu *ppu, uint8_t *pixels, size_t pitch, uint32_t render_flags);
+void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side);
 
 int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 

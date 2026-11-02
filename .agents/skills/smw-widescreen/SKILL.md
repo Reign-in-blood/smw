@@ -87,6 +87,12 @@ g_snes_width = g_config.extended_aspect_ratio * 2 + 256;
 - Tester jeu SDL et OpenGL, plein écran et fenêtré, filtre/GLSL, pause et chargement de sauvegardes.
 - Consigner résultat réel, branche/commit, capture ou trace, anomalie et procédure de reproduction. Ne pas déclarer « testé » sans l'avoir exécuté.
 
+## Journal des modifications — 1er prototype
+
+Un premier incrément expérimental a été ajouté sur `feature/widescreen-16-9` : option `ExtendedAspectRatio` désactivée par défaut, PPU élargi à 400 colonnes de capacité avec viewport visible 398x224, rendu latéral Mode 1 (hors mosaïque), repli 256px sur autres modes. **Pas de support achevé de la caméra, VRAM/Map16, spawn des ennemis et HUD.** Compilation Windows et comportement en jeu à valider par l'utilisateur.
+
+Lire [`docs/WIDESCREEN_PROTOTYPE.md`](../../../docs/WIDESCREEN_PROTOTYPE.md) avant les prochains changements.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.

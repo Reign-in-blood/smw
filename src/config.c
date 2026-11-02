@@ -373,6 +373,15 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.new_renderer);
     } else if (StringEqualsNoCase(key, "IgnoreAspectRatio")) {
       return ParseBool(value, &g_config.ignore_aspect_ratio);
+    } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
+      // 224 x 16 / 9 = 398 columns, i.e. 71 extra pixels per side.
+      if (StringEqualsNoCase(value, "16:9"))
+        g_config.extended_aspect_ratio = (224 * 16 / 9 - 256) / 2;
+      else if (StringEqualsNoCase(value, "4:3") || StringEqualsNoCase(value, "off"))
+        g_config.extended_aspect_ratio = 0;
+      else
+        return false;
+      return true;
     } else if (StringEqualsNoCase(key, "Fullscreen")) {
       g_config.fullscreen = (uint8)strtol(value, (char**)NULL, 10);
       return true;

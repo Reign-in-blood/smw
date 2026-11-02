@@ -20,7 +20,7 @@ static uint16_t ppu_getVramRemap(Ppu* ppu);
 
 
 Ppu* ppu_init(void) {
-  Ppu* ppu = malloc(sizeof(Ppu));
+  Ppu* ppu = calloc(1, sizeof(Ppu));
   return ppu;
 }
 
@@ -40,9 +40,12 @@ void ppu_reset(Ppu* ppu) {
   {
     size_t pitch = ppu->renderPitch;
     uint8_t *renderBuffer = ppu->renderBuffer;
+    uint8_t requestedExtra = ppu->requestedExtra;
     memset(ppu, 0, sizeof(*ppu));
     ppu->renderBuffer = renderBuffer;
     ppu->renderPitch = (uint32_t)pitch;
+    ppu->extraLeftRight = kPpuExtraLeftRight;
+    ppu->requestedExtra = requestedExtra;
   }
   ppu->vramIncrement = 1;
 }
@@ -59,6 +62,11 @@ void ppu_saveload(Ppu *ppu, SaveLoadInfo *sli) {
 void PpuBeginDrawing(Ppu *ppu, uint8_t *pixels, size_t pitch, uint32_t render_flags) {
   ppu->renderPitch = (uint)pitch;
   ppu->renderBuffer = pixels;
+  ppu->extraLeftRight = kPpuExtraLeftRight;
+}
+
+void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side) {
+  ppu->requestedExtra = (uint8_t)IntMin(IntMax(extra_pixels_per_side, 0), kPpuExtraLeftRight);
 }
 
 bool ppu_checkOverscan(Ppu* ppu) {
@@ -83,6 +91,11 @@ static inline void ClearBackdrop(PpuPixelPrioBufs *buf) {
 }
 
 void ppu_runLine(Ppu* ppu, int line) {
+  // Until the remaining SNES modes and mosaic drawing are audited, only
+  // Mode 1 with the fast PPU renders the experimental side columns.
+  uint8_t side = g_new_ppu && PPU_mode(ppu) == 1 && PPU_mosaicSize(ppu) == 1
+    ? ppu->requestedExtra : 0;
+  ppu->extraLeftCur = ppu->extraRightCur = side;
   if(line == 0) {
     if (PPU_mosaicSize(ppu) != ppu->lastMosaicModulo) {
       int mod = PPU_mosaicSize(ppu);
@@ -111,6 +124,13 @@ void ppu_runLine(Ppu* ppu, int line) {
       // Store 31 extra entries to remove the need for clamping to 31.
       memset(&ppu->brightnessMult[32], ppu->brightnessMult[31], 31);
     }
+
+    // Clear the undrawn border on every line (not only at startup).
+    // This prevents stale pixels during transitions and Mode 7 scenes.
+    uint8_t *scanline = ppu->renderBuffer + (line - 1) * ppu->renderPitch;
+    memset(scanline, 0, (kPpuExtraLeftRight - ppu->extraLeftCur) * 4);
+    memset(scanline + (kPpuExtraLeftRight + 256 + ppu->extraRightCur) * 4,
+           0, (kPpuExtraLeftRight - ppu->extraRightCur) * 4);
 
     // evaluate sprites
     ClearBackdrop(&ppu->objBuffer);
@@ -773,7 +793,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       x |= ((ppu->highOam[index >> 3] >> (index & 7)) & 1) << 8;
       if(x > 255) x -= 512;
       // if in x-range
-      if(x > -spriteSize) {
+      if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already
         spritesFound++;
         if(spritesFound > 32) {
@@ -795,7 +815,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
         PpuZbufType z = paletteBase + (prio << 8);
 
         for(int col = 0; col < spriteSize; col += 8) {
-          if(col + x > -8 && col + x < 256) {
+          if(col + x > -8 - ppu->extraLeftCur && col + x < 256 + ppu->extraRightCur) {
             // break if we found 34 8*1 slivers already
             tilesFound++;
             if(tilesFound > 34) {
