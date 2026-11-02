@@ -17,6 +17,26 @@ Lire ce fichier avant de modifier le viewport, la résolution interne, le PPU, l
 - **État lors de la création du skill** : documentation et recherche uniquement ; **aucun mode 16:9 implémenté ni testé dans ce fork**. À actualiser après chaque jalon.
 - Distinguer « fenêtre 16:9 » (étirement) de « scène 16:9 » (nouvelle zone de jeu).
 
+## Références complémentaires **obligatoires** avant tout nouveau correctif 16:9
+
+**Demande explicite du propriétaire (2 novembre 2026) : lire effectivement ces sources avant de corriger le spawn, les plateformes, l'OAM, le scrolling ou le HUD. Ne pas simplement les citer.**
+
+1. **[RetroPortingToolKit/snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp)**, notamment **[docs/WIDESCREEN_PATTERNS.md](https://github.com/RetroPortingToolKit/snesrecomp/blob/main/docs/WIDESCREEN_PATTERNS.md)**. Checklist de problèmes déjà rencontrés dans des ports SNES. Priorité aux invariants P1 (phase camera PPU), P7/P8 (deux barrières : culling + écriture OAM), P9/P10 (spawn anticipé + règles de progression séparées), P12 (objets de grande taille), P14 (interrupteurs indépendants), P16 (parité 4:3). Les concepts de Mega Man X ne s'appliquent pas à l'identique aux routines SMW : vérifier.
+2. **[VitorVilela7/wide-snes](https://github.com/VitorVilela7/wide-snes)**, en particulier **[super-mario-world/asm/level_sprites.asm](https://github.com/VitorVilela7/wide-snes/blob/master/super-mario-world/asm/level_sprites.asm)**, **[level_render.asm](https://github.com/VitorVilela7/wide-snes/blob/master/super-mario-world/asm/level_render.asm)** et **[main.asm](https://github.com/VitorVilela7/wide-snes/blob/master/super-mario-world/asm/main.asm)**. Dans `level_sprites.asm` se trouvent les fenêtres d'apparition, les tableaux `SUB_OFF_SCREEN`, le marquage des positions widescreen, la routine OAM ordinaire **et une correction dédiée `chain_test_for_offscreen` pour les plateformes à chaîne** (région correspondant à `$01C957`). Ce patch nécessite une ROM modifiée et **bsnes-hd** ; nous devons transposer des principes, jamais appliquer le BPS à notre port ou supposer le runtime identique.
+3. **[mstan/SuperMarioWorldRecomp](https://github.com/mstan/SuperMarioWorldRecomp)** est une référence **SMW native déjà dotée du widescreen adaptatif**. Lire en priorité **[docs/adaptive-renderer.md](https://github.com/mstan/SuperMarioWorldRecomp/blob/main/docs/adaptive-renderer.md)**, **[src/smw_renderer.c](https://github.com/mstan/SuperMarioWorldRecomp/blob/main/src/smw_renderer.c)**, **[src/smw_renderer_hooks.c](https://github.com/mstan/SuperMarioWorldRecomp/blob/main/src/smw_renderer_hooks.c)** et **[tools/apply_renderer_hooks.py](https://github.com/mstan/SuperMarioWorldRecomp/blob/main/tools/apply_renderer_hooks.py)**. Cette implémentation traite exactement l'activation à distance +32px, les limites de niveau, les sprites qui réutilisent le même OAM, les objets multi-tuiles, le HUD et les snapshots de caméra/VRAM/IRQ.
+4. **[snesrev/zelda3](https://github.com/snesrev/zelda3)** : référence générale pour le PPU 9 bits, **pas** suffisante pour les sprites complexes de SMW.
+
+**Architecture déjà éprouvée dans SuperMarioWorldRecomp :** conserver le PPU natif à 256×224 ; construire une surface hôte indépendante et capturer les coordonnées **signées et l'image OAM finale de chaque dessin d'objet** avant qu'un autre dessin ne réutilise son slot. Un index OAM avec une coordonnée « indice » (`widescreenOamX[128]`) ne peut pas identifier sans ambiguïté un élément : une plateforme peut occuper plusieurs slots, plusieurs dessins peuvent réutiliser le même slot, et un X positif 9 bits peut représenter la projection d'un objet situé à gauche. La simple vérification des huit bits de X n'est pas une identité d'objet.
+
+**Règle anti-boucle de débogage :** aucun autre patch combinant spawn, OAM et plateformes sans :
+- un scénario de reproduction précis (niveau/sous-niveau, objets, mouvement caméra, commit) et un diagnostic de la **cause** (création, culling, OAM, raster, streaming) ;
+- comparaison avec les fichiers **SMW** ci-dessus et la routine C équivalente de ce fork ;
+- un changement isolé, désactivable séparément des autres extensions ;
+- critères de régression : Koopa marge gauche/droite, plateformes mobiles et leurs collisions, eau BG3, item de réserve, tuyau/bonus, mode 4:3 ; conserver les résultats précédents ;
+- distinction nette entre « corrigé dans le code » et « confirmé par test Windows utilisateur ».
+
+Ne pas reprendre une solution d'un autre moteur sans vérifier la licence des fichiers concernés. **Pas de réécriture immédiate du moteur autorisée par ces notes :** d'abord faire une comparaison de conception et préparer des tests reproductibles.
+
 ## Références prioritaires et ce qu'elles apportent
 
 1. **Base du projet** : https://github.com/snesrev/smw — architecture actuelle, `src/main.c`, `src/snes/ppu.c`, `src/snes/ppu.h`, `src/opengl.c`, `src/config.c`, `smw.ini`.
@@ -159,6 +179,16 @@ Le test utilisateur du commit `1694bb8` confirme que les monstres apparaissent t
 **Cause probable du bug HUD :** la table `Ppu::widescreenOamX` reçoit des corrections hôte attachées à l'index OAM ; la SNES réutilise des slots pour des objets graphiques différents (dont l'item de réserve à X=120, Y=15 dans `UpdateStatusBarCounters_DrawItemBoxItem`). Une coordonnée d'un ancien sprite peut alors déplacer un nouveau sprite fixe. Le PPU ne consomme plus un indice hôte si ses 8 bits faibles ne correspondent pas à ceux de **l'OAM courant**. Cela ne modifie pas l'OAM original ni les coordonnées natives, et conserve le décodage étendu de Zelda3.
 
 **Tests Windows à réaliser (aucune compilation par l'assistant) :** niveau avec plateforme tournante + Koopa, eau BG3, item réserve pendant plusieurs passages de frontières de caméra à gauche/droite et sauvegarde/chargement. Noter défauts résiduels des plateformes et de l'eau ; bug du bonus (roue de blocs trop haute) toujours ouvert.
+
+## Test du 2 novembre 2026 après `af68f69` — état de référence, régressions ouvertes
+
+- **Eau BG3 : OK**, rendu plein champ en 16:9 ; ne pas la casser.
+- **Objet de réserve dans la case au centre du HUD : OK**, décalage temporaire corrigé ; ne pas le casser.
+- **Plateformes mobiles tournantes/chaînes : NON**. Quand la caméra se déplace vers la droite, la plateforme à gauche se représente à droite ; les deux images deviennent figées, puis disparaissent. Les plateformes étaient visibles auparavant mais avec des bugs. Hypothèses à départager : interprétation ambiguë du X OAM 9 bits, réemploi des slots OAM, dessin multi-tuiles, culling propre au sprite `0x5F`. `wide-snes/level_sprites.asm::chain_test_for_offscreen` est une piste directe (le projet considère ce cas **distinct** du culling générique).
+- **Ennemis : NON**, apparition toujours calée sur la fenêtre native 256 pixels malgré la marge 16:9. La liste blanche de préchargement dans notre `src/smw_02.c` ne suffit pas : séparer dans un diagnostic **record effectivement chargé**, **sprite actif**, **draw info/culling**, **OAM final**, **pixel PPU visible**. L'apparition en 1:1 peut venir de n'importe quel stade ; ne pas retoucher les seuils au hasard.
+- **Bonus de tuyau : régressions toujours ouvertes** (objets erronés/absents, roue de blocs trop haute). Ne pas déclarer la prise en charge des sous-niveaux terminée.
+
+**Décision technique du jalon suivant :** SUSPENDRE les ajustements incrémentaux non mesurés de seuils. Étudier le `src/smw_renderer_hooks.c` et le `src/smw_renderer.c` de SuperMarioWorldRecomp : ce projet conserve les dessins OAM de chaque objet à la frontière des routines, avant leur réutilisation, puis reconstruit un affichage hôte distinct. Comparer point par point avec notre `widescreenOamX[128]`, qui associe à tort une coordonnée à un seul emplacement OAM mutable. Préférer un prototype isolé de capture de **chaque dessin terminé** à une accumulation de correctifs pour chaque ennemi. Préparer des mesures avant toute nouvelle modification. Aucun correctif de gameplay n'a été appliqué pendant cette mise à jour documentaire.
 
 ## Règles de réutilisation
 
