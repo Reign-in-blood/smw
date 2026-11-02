@@ -74,6 +74,7 @@ void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side) {
 // This data is not serialized or written into the emulated SNES OAM.
 void PpuWidescreenClearOamX(Ppu *ppu) {
   memset(ppu->widescreenOamX, 0, sizeof(ppu->widescreenOamX));
+  memset(ppu->widescreenFinalX, 0, sizeof(ppu->widescreenFinalX));
   ppu->widescreenDrawCount = 0;
 }
 
@@ -115,6 +116,18 @@ void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,
                          now_size[i] != old_size[i];
     uint16_t known_x = ppu->widescreenOamX[64 + i];
     const bool authored_here = known_x && (uint8_t)known_x == tile[0];
+    // Remember the exact final OAM image for the slot still owned by this
+    // actor. If a later actor overwrites it, invalidate the association.
+    // Native sprite evaluation can then safely show its real +256..+326 X.
+    if (changed || authored_here) {
+      ppu->widescreenFinalX[i] = authored_here ? known_x : 0;
+      if (authored_here) {
+        ppu->widescreenFinalImage[i] =
+            (uint32_t)tile[0] | (uint32_t)tile[1] << 8 |
+            (uint32_t)tile[2] << 16 | (uint32_t)tile[3] << 24;
+        ppu->widescreenFinalSize[i] = now_size[i] & 3;
+      }
+    }
     if (!changed && !authored_here)
       continue;
     // Recover the signed position from this actor's source coordinates.
@@ -950,12 +963,23 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       // widescreen right or -212 on the SNES left. Interpreting every
       // 256..326 value as positive makes a platform leaving the left edge
       // reappear on the right, freeze and vanish as the camera scrolls.
-      // Use the native signed decode unless a C sprite draw supplies its
-      // independently computed signed world-space X below.
+      // Native signed decode is the baseline, preserving left-side
+      // sprites and avoiding the old left-platform/right-ghost bug.
       if (x >= 256) x -= 512;
-      // Do not reinterpret mutable OAM slots with host X hints here.
-      // Extra right-margin sprites are drawn from completed per-actor
-      // captures after the native SNES pass instead.
+      // Use the positive world-space X only if the *final* native OAM
+      // position, tile, attributes and high-OAM size still match the
+      // actor that authored it. A mutable slot number or low X alone is
+      // insufficient to distinguish +300 from -212.
+      if (ppu->extraRightCur && index >= 128) {
+        unsigned slot = (index >> 1) - 64;
+        uint16_t real_x = ppu->widescreenFinalX[slot];
+        uint32_t image = (uint32_t)ppu->oam[index] |
+                         (uint32_t)ppu->oam[index + 1] << 16;
+        unsigned size = (ppu->highOam[index >> 3] >> (index & 7)) & 3;
+        if (real_x && image == ppu->widescreenFinalImage[slot] &&
+            size == ppu->widescreenFinalSize[slot])
+          x = real_x;
+      }
       // if in x-range
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
         // break if we found 32 sprites already

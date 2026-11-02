@@ -140,6 +140,13 @@ struct Ppu {
   // Screen-space X for OAM tiles beyond the SNES 256px right edge.
   // Zero means use the original OAM 9-bit signed coordinate.
   uint16_t widescreenOamX[128];
+  // Exact native OAM image of the latest author of each high-half slot.
+  // Restores the positive-X rendering that worked at the Zelda3 milestone,
+  // but never interprets a negative-X 9-bit alias as a right-side sprite.
+  // Both are PC-only and excluded from SNES snapshots.
+  uint16_t widescreenFinalX[64];
+  uint32_t widescreenFinalImage[64];
+  uint8_t widescreenFinalSize[64];
   // Capture the *completed* image of each normal actor before another
   // actor reuses its native OAM entries. These host-only right-margin
   // drawings do not modify guest RAM, native OAM or 4:3 presentation.

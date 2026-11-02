@@ -225,6 +225,12 @@ Le `SMW_WS_TRACE` existant ne trace que les tentatives réussies/échouées du p
 
 **Nouvelle télémétrie** avec `SMW_WS_TRACE=1`, toujours toutes les 120 frames : `WS render frames=N captured_frames=C drawn_frames=D peak_pieces=P`. `C` est le nombre de frames (sur 120) ayant au moins un morceau capturé ; `D` celui des frames où le renderer écrit **réellement au moins un pixel OBJ non transparent** à droite de X=255 ; `P` le maximum de morceaux dans une frame. Si `C>0` et `D=0`, le problème se situe dans le raster (position Y, VRAM, fenêtre, palette) ; si `C=0` malgré des spawns confirmés, regarder `GetDrawInfo`, `FinishOAMWrite`, l'OAM et le type de sprite. Si `D>0` mais visuellement rien, regarder la composition OBJ avec BG/masques et la zone effectivement présentée. Les captures sont limitées à la marge droite ; le BG3, le HUD et le 4:3 ne changent pas dans ce jalon. **Aucune validation Windows réalisée par l'assistant.**
 
+## Jalon 10 — restauration OAM Zelda3 contrôlée, sans fantôme de plateforme
+
+Les traces utilisateur confirment des spawns avancés (`WS spawn ... status=1 blocked=0`) et de vrais pixels OBJ dans la marge (`drawn_frames>0`), mais **toujours aucun mob visible en 16:9**. À l'étape `0ccdc1f`, l'élargissement direct de la lecture OAM avait semblé fonctionner pour les ennemis ; sa désactivation ultérieure a restauré le problème.
+
+Correctif ciblé : `ppu_evaluateSprites` garde **par défaut** le décodage SNES signé X>=256→X-512, essentiel pour éviter la plateforme à gauche répliquée à droite. Après chaque acteur, `PpuWidescreenCaptureActor` enregistre dans une table hôte un X positif 256..326 avec signature **complète** (4 octets OAM terminés + bits X/size de `sprites_oamtile_size_buffer`) si ce même acteur a fourni une coordonnée source fiable. Un acteur suivant qui réécrit la case invalide l'identité. Le PPU ne redresse X vers +256..326 que lorsque le OAM final envoyé et les bits high-OAM correspondent exactement à la signature enregistrée. Les captures par-acteur demeurent pour les morceaux écrasés. **Aucun test Windows par l'assistant ; ne pas certifier avant validation.**
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.
