@@ -26,12 +26,11 @@ Si la tâche touche les deux domaines, consulter les deux skills. Leurs fichiers
 **Exigence du propriétaire :** après **chaque opération de l'assistant qui modifie le dépôt distant** (code, documentation, skill, configuration, commit ou fusion), terminer la réponse par une commande PowerShell **prête à copier-coller** pour récupérer le changement sur son PC.
 
 - Indiquer explicitement le **nom de la branche modifiée** et, si possible, le lien ou le SHA du commit.
-- Donner un **bloc de code `powershell` complet**, comprenant le chemin local connu, `git fetch origin`, `git switch <branche>` et `git pull --ff-only origin <branche>`. Adapter le nom de branche à l'opération réelle : ne jamais supposer que c'est toujours `main`.
-- L'utilisateur travaille dans `X:\GitHub project\smw` sous Windows PowerShell. Utiliser des commandes Git simples et compatibles.
+- Donner un **bloc de code `powershell` prêt à copier-coller, sans commande `cd`**, car l'utilisateur se trouve déjà dans le bon dossier Git. Fournir `git fetch origin`, `git switch <branche>` et `git pull --ff-only origin <branche>` lorsque nécessaire. Adapter le nom de branche à l'opération réelle : ne jamais supposer que c'est toujours `main`.
+- L'utilisateur utilise Windows PowerShell et reste par défaut dans `X:\GitHub project\smw`. Ne **jamais** ajouter de `cd` dans les blocs de synchronisation Git, sauf demande explicite. Utiliser des commandes simples et compatibles.
 - Pour la branche de travail actuelle, le bloc recommandé est :
 
 ```powershell
-cd "X:\GitHub project\smw"
 git fetch origin
 git switch feature/widescreen-16-9
 git pull --ff-only origin feature/widescreen-16-9
@@ -45,7 +44,6 @@ git pull --ff-only origin feature/widescreen-16-9
 ## Compilation et contrôle locaux (PowerShell)
 
 ```powershell
-cd "X:\GitHub project\smw"
 git fetch origin
 git switch feature/widescreen-16-9
 git pull --ff-only origin feature/widescreen-16-9
