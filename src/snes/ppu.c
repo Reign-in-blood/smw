@@ -803,7 +803,9 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
       // in y-range, get the x location, using the high bit as well
       int x = ppu->oam[index] & 0xff;
       x |= ((ppu->highOam[index >> 3] >> (index & 7)) & 1) << 8;
-      if(x > 255) x -= 512;
+      // Zelda3 keeps 9-bit OAM X coordinates that fit the extra right edge.
+      // X=300 is on the right, not at X=-212. 4:3 still wraps at X=256.
+      if (x >= 256 + ppu->extraRightCur) x -= 512;
       // The host-side marker distinguishes an actual X>255 on the right
       // from the SNES negative-X encoding used for objects on the left.
       // Only 16:9 mode writes markers; the 4:3 path remains unmodified.

@@ -68,3 +68,11 @@ The PPU originally interprets 9-bit OAM X values >=256 as negative (X-512). That
 The extra sprite loader now checks whether a source index still belongs to an active normal sprite slot, even when load status has been cleared, before allowing duplicate spawning. Its placement guard is no longer cleared when the placement leaves the activation region but its enemy remains alive.
 
 **Tests:** compile with TCC; check a basic Koopa appearing toward the right outside the old 256px area, moving into the old field, then back. Walk left/right to check duplicate enemies, kill an enemy and inspect return behavior. The change does *not* yet cover special drawing paths, alternative OAM routines or the bonus-room regression. Verify 4:3 parity. If all enemies still pop in at the old border, inspect the remaining OAM paths and the scene mode.
+
+## Milestone 4 — Zelda3 9-bit sprite X decoding
+
+The user reports that ordinary enemies still pop in at the native 256px edge. `snesrev/zelda3/snes/ppu.c::ppu_evaluateSprites` holds 9-bit X on the right until the extended edge; SMW's PPU used to wrap all 9-bit X >=256 by subtracting 512. X=300 thus became -212, hiding a sprite that legitimately belongs on the widened right side.
+
+SMW now wraps at `x >= 256 + ppu->extraRightCur`. With the experimental 71 extra pixels this permits X=256..326; with 4:3 it wraps at the original 256. The previous host-only OAM-X markers remain in place. This is a targeted rendering correction, not a fix for enemy spawn semantics, every specialty graphics routine, duplicate actor lifecycle, or the pipe bonus room.
+
+**Unverified Windows test**: rebuild with TCC, check normal Koopas at X=256..326 while entering from right, then move camera back and forth; compare to 4:3. If sprites still only appear at the old border, log the placement-loader and actual high OAM X bit for a specific enemy.

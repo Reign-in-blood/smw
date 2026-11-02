@@ -132,6 +132,14 @@ Un second correctif relie `g_widescreen_spawn_guard` au parseur de sprites d'ori
 
 Le garde de spawn vérifie maintenant les 12 slots réellement actifs et ne réinitialise l'identité d'un placement hors fenêtre que si aucun ennemi issu de ce placement n'est encore vivant. **Limites** : chemins de dessin spéciaux, sprites supplémentaires, limites OAM SNES, état des gardes non sérialisé ; autres anomalies graphiques et niveau bonus toujours non corrigés. Ne pas déclarer « fonctionnel » sans nouveau test TCC Windows.
 
+## Comparaison ciblée avec Zelda3 : décodage 9 bits des sprites (2 novembre 2026)
+
+Le test utilisateur du commit `1694bb8` confirme que les monstres apparaissent toujours à la limite de l'ancienne fenêtre de 256 pixels. **Différence structurelle retrouvée dans Zelda3** : `snesrev/zelda3/snes/ppu.c::ppu_evaluateSprites` applique la soustraction 512 uniquement si `x >= 256 + extra_left_right`. La version SMW appliquait systématiquement `if (x > 255) x -= 512`, ce qui transforme un sprite situé à x=300 en x=-212, même quand le nouveau PPU affiche le décor à droite. Voir https://github.com/snesrev/zelda3/blob/master/snes/ppu.c#L1239-L1267.
+
+**Correctif ciblé** : `src/snes/ppu.c::ppu_evaluateSprites` teste désormais `x >= 256 + ppu->extraRightCur`. Le mode 4:3 conserve exactement le seuil historique de 256 ; la largeur supplémentaire n'est prise en compte que si elle est autorisée pour cette ligne. Le correctif hôte `widescreenOamX` reste en place. Cela ne prouve **pas** que les ennemis s'afficheront : seule une nouvelle compilation/test Windows le confirmera.
+
+**Autre référence Zelda3 à maintenir** : `src/sprite.c::Sprite_ActivateWhenProximal` et `Sprite_PrepOamCoordOrDoubleRet` élargissent séparément activation, visibilité et conservation avec `kFeatures0_ExtendScreen64`. Le PPU seul ne suffit pas. Les doublons et le niveau bonus à la roue de blocs restent des régressions ouvertes.
+
 ## Règles de réutilisation
 
 Respecter les licences individuelles et les auteurs ; ne pas intégrer ROM, ressources propriétaires, patchs binaires ou code externe sans vérification des conditions. Toute référence externe doit être un lien vers le dépôt d'origine et une idée vérifiable, pas une garantie de compatibilité.
