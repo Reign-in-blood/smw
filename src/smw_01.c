@@ -797,6 +797,7 @@ void ProcessNormalSprites() {  // 01808c
     if (g_ppu->requestedExtra && spr_current_status[i]) {
       int origin_x = (int16)(GetSprXPos(i) - mirror_current_layer1_xpos);
       uint8 id = spr_spriteid[i];
+      PpuWidescreenTraceActor(g_ppu, origin_x, id);
       bool complex = id == 0x5f || id == 0x9e || id == 0xa3;
       PpuWidescreenCaptureActor(g_ppu, origin_x, complex,
           oam_before, size_before, g_ram + 0x300,

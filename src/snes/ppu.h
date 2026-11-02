@@ -156,6 +156,14 @@ struct Ppu {
   } widescreenDraws[512];
   uint16_t widescreenDrawCount;
   bool widescreenFrameDrewPixels;
+  // Opt-in diagnostic of the full actor -> native OBJ -> composited OBJ
+  // pipeline. Host-only, never serialized, no impact when tracing is off.
+  bool widescreenTraceEnabled;
+  uint16_t widescreenFrameActors;
+  uint16_t widescreenFrameMappedRows;
+  uint32_t widescreenFrameObjPixels, widescreenFrameComposedPixels;
+  uint8_t widescreenFrameFirstActorId;
+  int16_t widescreenFrameFirstActorX;
   uint8_t lastMosaicModulo;
   uint8_t lastBrightnessMult;
   bool lineHasSprites;
@@ -255,6 +263,7 @@ void PpuSetWidescreen(Ppu *ppu, int extra_pixels_per_side);
 void PpuWidescreenClearOamX(Ppu *ppu);
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x);
 void PpuWidescreenBeginActor(Ppu *ppu);
+void PpuWidescreenTraceActor(Ppu *ppu, int screen_x, uint8_t sprite_id);
 // old/now OAM point at the 64 normal-sprite tiles (0x300..0x3ff),
 // old/now size at 0x460..0x49f. Capture immediately after each actor.
 void PpuWidescreenCaptureActor(Ppu *ppu, int origin_x, bool complex_sprite,

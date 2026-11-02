@@ -76,6 +76,11 @@ void PpuWidescreenClearOamX(Ppu *ppu) {
   memset(ppu->widescreenOamX, 0, sizeof(ppu->widescreenOamX));
   memset(ppu->widescreenFinalX, 0, sizeof(ppu->widescreenFinalX));
   ppu->widescreenDrawCount = 0;
+  const char *trace = getenv("SMW_WS_TRACE");
+  ppu->widescreenTraceEnabled = ppu->requestedExtra && trace && trace[0] == '1';
+  ppu->widescreenFrameActors = 0;
+  ppu->widescreenFrameFirstActorId = 0xff;
+  ppu->widescreenFrameFirstActorX = 0;
 }
 
 // Reset provenance for each native actor; captured images are already
@@ -83,6 +88,20 @@ void PpuWidescreenClearOamX(Ppu *ppu) {
 void PpuWidescreenBeginActor(Ppu *ppu) {
   if (ppu->requestedExtra)
     memset(ppu->widescreenOamX + 64, 0, 64 * sizeof(uint16_t));
+}
+
+// Record only normal sprites physically inside the added right viewport.
+// An actor may have spawned far ahead and never reach this band; that is
+// different from failure in OAM evaluation or pixel composition.
+void PpuWidescreenTraceActor(Ppu *ppu, int screen_x, uint8_t sprite_id) {
+  if (!ppu->widescreenTraceEnabled || screen_x < 256 ||
+      screen_x >= 256 + ppu->requestedExtra)
+    return;
+  ++ppu->widescreenFrameActors;
+  if (ppu->widescreenFrameFirstActorId == 0xff) {
+    ppu->widescreenFrameFirstActorId = sprite_id;
+    ppu->widescreenFrameFirstActorX = screen_x;
+  }
 }
 
 void PpuWidescreenSetOamX(Ppu *ppu, uint8_t oam_byte_offset, int x) {
@@ -182,6 +201,9 @@ void ppu_runLine(Ppu* ppu, int line) {
   ppu->widescreenBg3 = side && line > 32;
   if(line == 0) {
     ppu->widescreenFrameDrewPixels = false;
+    ppu->widescreenFrameMappedRows = 0;
+    ppu->widescreenFrameObjPixels = 0;
+    ppu->widescreenFrameComposedPixels = 0;
     if (PPU_mosaicSize(ppu) != ppu->lastMosaicModulo) {
       int mod = PPU_mosaicSize(ppu);
       ppu->lastMosaicModulo = mod;
@@ -226,25 +248,50 @@ void ppu_runLine(Ppu* ppu, int line) {
     } else {
       PpuDrawWholeLineOldPpu(ppu, line);
     }
-    // An optional low-volume rendering diagnostic, distinct from the
-    // event-only "WS spawn" trace. The count shows that the actual
-    // per-actor right-margin captures have reached the renderer.
-    if (line == 224 && ppu->requestedExtra) {
-      static unsigned trace_frame, frames_captured, frames_drawn, peak_parts;
-      const char *trace = getenv("SMW_WS_TRACE");
-      if (trace && trace[0] == '1') {
-        ++trace_frame;
-        if (ppu->widescreenDrawCount)
-          ++frames_captured;
-        if (ppu->widescreenFrameDrewPixels)
-          ++frames_drawn;
-        if (ppu->widescreenDrawCount > peak_parts)
-          peak_parts = ppu->widescreenDrawCount;
-        if (trace_frame % 120 == 0) {
-          printf("WS render frames=%u captured_frames=%u drawn_frames=%u peak_pieces=%u\n",
-              trace_frame, frames_captured, frames_drawn, peak_parts);
-          frames_captured = frames_drawn = peak_parts = 0;
+    // Diagnostic is measured at three independent pipeline stages:
+    // live sprite in the extra band; rasterized OBJ pixels; composed OBJ
+    // pixels surviving BG priorities/window masks into the main scene.
+    if (ppu->widescreenTraceEnabled && ppu->extraRightCur && line > 32) {
+      for (int x = 256; x < 256 + ppu->extraRightCur; x++) {
+        int column = kPpuExtraLeftRight + x;
+        PpuZbufType obj = ppu->objBuffer.data[column];
+        if (obj & 0xff) {
+          ++ppu->widescreenFrameObjPixels;
+          if (ppu->bgBuffers[0].data[column] == obj)
+            ++ppu->widescreenFrameComposedPixels;
         }
+      }
+    }
+    if (line == 224 && ppu->widescreenTraceEnabled) {
+      static unsigned frame, captured_frames, drawn_frames, actor_frames;
+      static unsigned obj_frames, composed_frames, mapped_frames;
+      static unsigned long obj_pixels, composed_pixels;
+      static unsigned peak, first_id, first_x;
+      ++frame;
+      if (ppu->widescreenDrawCount) ++captured_frames;
+      if (ppu->widescreenFrameDrewPixels) ++drawn_frames;
+      if (ppu->widescreenFrameActors) {
+        ++actor_frames;
+        first_id = ppu->widescreenFrameFirstActorId;
+        first_x = ppu->widescreenFrameFirstActorX;
+      }
+      if (ppu->widescreenFrameMappedRows) ++mapped_frames;
+      if (ppu->widescreenFrameObjPixels) ++obj_frames;
+      if (ppu->widescreenFrameComposedPixels) ++composed_frames;
+      obj_pixels += ppu->widescreenFrameObjPixels;
+      composed_pixels += ppu->widescreenFrameComposedPixels;
+      if (ppu->widescreenDrawCount > peak) peak = ppu->widescreenDrawCount;
+      if (frame % 120 == 0) {
+        printf("WS stages frames=%u actors=%u mapped=%u obj=%u visible=%u example_id=%02X example_x=%u\n",
+            frame, actor_frames, mapped_frames, obj_frames,
+            composed_frames, first_id, first_x);
+        printf("WS pixels raw=%lu visible=%lu captured_frames=%u overlay_frames=%u peak=%u\n",
+            obj_pixels, composed_pixels, captured_frames, drawn_frames, peak);
+        captured_frames = drawn_frames = actor_frames = 0;
+        mapped_frames = obj_frames = composed_frames = peak = 0;
+        obj_pixels = composed_pixels = 0;
+        first_id = 0xff;
+        first_x = 0;
       }
     }
   }
@@ -977,8 +1024,11 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
                          (uint32_t)ppu->oam[index + 1] << 16;
         unsigned size = (ppu->highOam[index >> 3] >> (index & 7)) & 3;
         if (real_x && image == ppu->widescreenFinalImage[slot] &&
-            size == ppu->widescreenFinalSize[slot])
+            size == ppu->widescreenFinalSize[slot]) {
           x = real_x;
+          if (ppu->widescreenTraceEnabled)
+            ++ppu->widescreenFrameMappedRows;
+        }
       }
       // if in x-range
       if(x > -spriteSize - ppu->extraLeftCur && x < 256 + ppu->extraRightCur) {
